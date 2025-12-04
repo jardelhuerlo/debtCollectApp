@@ -11,6 +11,10 @@
     "ios": {
       "supportsTablet": true
     },
+    "extra": {
+     " supabaseUrl": "process.env.EXPO_PUBLIC_SUPABASE_URL",
+      "supabaseAnonKey": "process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY"
+    },
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
@@ -44,5 +48,7 @@
       "typedRoutes": true,
       "reactCompiler": true
     }
+    
   }
+  
 }

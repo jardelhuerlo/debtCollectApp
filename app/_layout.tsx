@@ -5,32 +5,44 @@ import 'react-native-reanimated';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { supabase } from '@/lib/supabase';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
 export const unstable_settings = {
   anchor: '(tabs)',
 };
 
 export default function RootLayout() {
+  const colorScheme = useColorScheme();
+
+  const [sessionLoaded, setSessionLoaded] = useState(false);
 
   useEffect(() => {
-    async function loginDev() {
-      // Verifica si ya hay usuario autenticado
-      const { data } = await supabase.auth.getUser();
-      if (data?.user) return;
+    async function setupSession() {
+      const { data } = await supabase.auth.getSession();
 
-      // Login automático
-      await supabase.auth.signInWithPassword({
-        email: "dev@local.com",
-        password: "12345678",
-      });
+      if (!data.session) {
+        await supabase.auth.signInWithPassword({
+          email: "dev@local.com",
+          password: "12345678",
+        });
+      }
+
+      setSessionLoaded(true);
     }
 
-    loginDev();
+    // --- escuchar cambios de autenticación ---
+    const { data: listener } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        setSessionLoaded(true);
+      }
+    );
+
+    setupSession();
+
+    return () => listener.subscription.unsubscribe();
   }, []);
 
-
-  const colorScheme = useColorScheme();
+  if (!sessionLoaded) return null; // evita que cargue rutas sin sesión
 
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
