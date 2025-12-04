@@ -4,12 +4,32 @@ import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { supabase } from '@/lib/supabase';
+import { useEffect } from 'react';
 
 export const unstable_settings = {
   anchor: '(tabs)',
 };
 
 export default function RootLayout() {
+
+  useEffect(() => {
+    async function loginDev() {
+      // Verifica si ya hay usuario autenticado
+      const { data } = await supabase.auth.getUser();
+      if (data?.user) return;
+
+      // Login automático
+      await supabase.auth.signInWithPassword({
+        email: "dev@local.com",
+        password: "12345678",
+      });
+    }
+
+    loginDev();
+  }, []);
+
+
   const colorScheme = useColorScheme();
 
   return (
