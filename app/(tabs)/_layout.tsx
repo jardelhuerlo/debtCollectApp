@@ -11,29 +11,30 @@ export default function TabLayout() {
 
   return (
     <Tabs
+      initialRouteName='loans-historyScreen'
       screenOptions={{
         tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
         headerShown: false,
         tabBarButton: HapticTab,
       }}>
       <Tabs.Screen
-        name="loans-historyScream"
+        name="loans-historyScreen"
         options={{
-          title: 'History',
+          title: 'Historial',
           tabBarIcon: ({ color }) => <IconSymbol size={28} name="house.fill" color={color} />,
         }}
       />
       <Tabs.Screen
-        name="loansScream"
+        name="loansScreen"
         options={{
-          title: 'loansScream',
+          title: 'Registro',
           tabBarIcon: ({ color }) => <IconSymbol size={28} name="paperplane.fill" color={color} />,
         }}
       />
       <Tabs.Screen
-        name="explore"
+        name="userScreen"
         options={{
-          title: 'Explore',
+          title: 'Usuario',
           tabBarIcon: ({ color }) => <IconSymbol size={28} name="paperplane.fill" color={color} />,
         }}
       />
