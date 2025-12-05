@@ -1,5 +1,5 @@
 import type { Session } from "@supabase/supabase-js";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -9,6 +9,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { supabase } from "../../lib/supabase";
+import { useRouter } from "expo-router";
 
 export interface Profile {
   full_name: string;
@@ -19,22 +20,22 @@ export interface Profile {
 
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
+
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
 
-  useEffect(() => {
-    loadProfile();
-  }, []);
-
-  const loadProfile = async () => {
+  // 🟦 FIX: useCallback para evitar el warning de dependencias en useEffect
+  const loadProfile = useCallback(async () => {
     setLoading(true);
+
     const {
       data: { session },
     }: { data: { session: Session | null } } = await supabase.auth.getSession();
 
     if (!session) {
       console.warn("No hay sesión activa");
-      setLoading(false);
+      router.replace("/loginScreen");
       return;
     }
 
@@ -49,16 +50,24 @@ export default function ProfileScreen() {
     } else {
       console.error("Error cargando perfil:", error);
     }
+
     setLoading(false);
-  };
+  }, [router]);
+
+  // 🟦 FIX: ahora el effect no muestra warning
+  useEffect(() => {
+    loadProfile();
+  }, [loadProfile]);
 
   const handleSignOut = async () => {
     const { error } = await supabase.auth.signOut();
+
     if (error) {
       Alert.alert("Error", "No se pudo cerrar sesión");
-    } else {
-      Alert.alert("Sesión cerrada", "Has cerrado sesión correctamente");
+      return;
     }
+
+    router.replace("/loginScreen");
   };
 
   const getInitials = (name: string) => {
@@ -102,7 +111,7 @@ export default function ProfileScreen() {
         justifyContent: "space-between",
       }}
     >
-      {/* CUADRITO DE INICIALES */}
+      {/* FOTO CON INICIALES */}
       <View style={{ alignItems: "center" }}>
         <View
           style={{
@@ -113,8 +122,8 @@ export default function ProfileScreen() {
             justifyContent: "center",
             alignItems: "center",
             marginBottom: 20,
-            elevation: 5, // sombra android
-            shadowColor: "#000", // sombra iOS
+            elevation: 5,
+            shadowColor: "#000",
             shadowOffset: { width: 0, height: 3 },
             shadowOpacity: 0.3,
             shadowRadius: 4,
@@ -125,7 +134,7 @@ export default function ProfileScreen() {
           </Text>
         </View>
 
-        {/* CARD DE INFORMACIÓN */}
+        {/* CARD INFORMACIÓN */}
         <View
           style={{
             backgroundColor: "#fff",
@@ -139,9 +148,7 @@ export default function ProfileScreen() {
             shadowRadius: 4,
           }}
         >
-          <Text
-            style={{ fontSize: 22, fontWeight: "bold", marginBottom: 12 }}
-          >
+          <Text style={{ fontSize: 22, fontWeight: "bold", marginBottom: 12 }}>
             {profile.full_name}
           </Text>
 
@@ -154,11 +161,14 @@ export default function ProfileScreen() {
           {profile.subscription_expires && (
             <Text style={{ fontSize: 16, color: "#555" }}>
               🔹 Suscripción expira:{" "}
-              {new Date(profile.subscription_expires).toLocaleDateString("es-EC", {
-                day: "2-digit",
-                month: "long",
-                year: "numeric",
-              })}
+              {new Date(profile.subscription_expires).toLocaleDateString(
+                "es-EC",
+                {
+                  day: "2-digit",
+                  month: "long",
+                  year: "numeric",
+                }
+              )}
             </Text>
           )}
         </View>

@@ -1,56 +1,46 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { Stack } from 'expo-router';
-import { StatusBar } from 'expo-status-bar';
-import 'react-native-reanimated';
-
-import { useColorScheme } from '@/hooks/use-color-scheme';
-import { supabase } from '@/lib/supabase';
-import { useEffect, useState } from 'react';
-
-export const unstable_settings = {
-  anchor: '(tabs)',
-};
+import { Stack, useRouter } from "expo-router";
+import { supabase } from "@/lib/supabase";
+import { useEffect, useState } from "react";
+import { Session } from "@supabase/supabase-js";
+import { ActivityIndicator, View } from "react-native";
 
 export default function RootLayout() {
-  const colorScheme = useColorScheme();
-
-  const [sessionLoaded, setSessionLoaded] = useState(false);
+  const router = useRouter();
+  const [session, setSession] = useState<Session | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    async function setupSession() {
-      const { data } = await supabase.auth.getSession();
+    // Obtener sesión inicial
+    supabase.auth.getSession().then(({ data }) => {
+      setSession(data.session);
+      setLoading(false);
 
       if (!data.session) {
-        await supabase.auth.signInWithPassword({
-          email: "dev@local.com",
-          password: "12345678",
-        });
+        router.replace("/loginScreen");
       }
+    });
 
-      setSessionLoaded(true);
-    }
+    // Escuchar cambios (login/logout)
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
 
-    // --- escuchar cambios de autenticación ---
-    const { data: listener } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
-        setSessionLoaded(true);
+      if (!session) {
+        router.replace("/loginScreen");
+      } else {
+        router.replace("/loans-historyScreen");
       }
-    );
-
-    setupSession();
+    });
 
     return () => listener.subscription.unsubscribe();
-  }, []);
+  }, [router]);
 
-  if (!sessionLoaded) return null; // evita que cargue rutas sin sesión
+  if (loading) {
+    return (
+      <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+        <ActivityIndicator size="large" />
+      </View>
+    );
+  }
 
-  return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
-      </Stack>
-      <StatusBar style="auto" />
-    </ThemeProvider>
-  );
+  return <Stack screenOptions={{ headerShown: false }} />;
 }

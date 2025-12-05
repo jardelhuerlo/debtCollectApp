@@ -1,19 +1,18 @@
 import React, { useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
-  ScrollView,
   Text,
   TextInput,
   TouchableOpacity,
   View,
-  ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { supabase } from "../../lib/supabase";
 
 interface LoanForm {
   debtor_name: string;
-  interes:string;
+  interes: string;
   amount: string;
   payment_method: "efectivo" | "transferencia";
   note: string;
@@ -22,7 +21,7 @@ interface LoanForm {
 export default function LoansScreen() {
   const [form, setForm] = useState<LoanForm>({
     debtor_name: "",
-    interes:"",
+    interes: "",
     amount: "",
     payment_method: "efectivo",
     note: "",
@@ -75,7 +74,7 @@ export default function LoansScreen() {
       setForm({
         debtor_name: "",
         amount: "",
-        interes:"",
+        interes: "",
         payment_method: "efectivo",
         note: "",
       });
@@ -83,8 +82,7 @@ export default function LoansScreen() {
   };
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: "#fff" }}>
-      <SafeAreaView>
+      <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
         <View style={{ padding: 20 }}>
           <Text
             style={{
@@ -115,7 +113,7 @@ export default function LoansScreen() {
             style={styles.input}
           />
 
-             {/* Interes */}
+          {/* Interes */}
           <Text>Interes</Text>
           <TextInput
             value={form.interes}
@@ -174,9 +172,14 @@ export default function LoansScreen() {
               padding: 15,
               borderRadius: 10,
               alignItems: "center",
-              marginTop: 10,
+              marginTop: 300,
               flexDirection: "row",
               justifyContent: "center",
+              elevation: 3,
+              shadowColor: "#000",
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.2,
+              shadowRadius: 3,
             }}
           >
             {loading && <ActivityIndicator color="#fff" style={{ marginRight: 10 }} />}
@@ -188,7 +191,6 @@ export default function LoansScreen() {
           </TouchableOpacity>
         </View>
       </SafeAreaView>
-    </ScrollView>
   );
 }
 

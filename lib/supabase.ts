@@ -1,20 +1,16 @@
-import { createClient } from '@supabase/supabase-js';
+// lib/supabase.ts
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { createClient } from "@supabase/supabase-js";
 
-const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL as string;
-const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY as string;
+const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL!;
+const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
-
-export async function devAutoLogin() {
-  const { data } = await supabase.auth.getUser();
-
-  // Si ya hay sesión, no hacemos nada
-  if (data?.user) return;
-
-  // Usuario de pruebas
-  await supabase.auth.signInWithPassword({
-    email: "test@example.com",
-    password: "12345678",
-  });
-}
-
+export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  auth: {
+    // Persistir sesión en React Native usando AsyncStorage
+    persistSession: true,
+    autoRefreshToken: true,
+    storage: AsyncStorage as any,
+    detectSessionInUrl: false,
+  },
+});
