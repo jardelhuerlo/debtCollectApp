@@ -1,14 +1,14 @@
 import { useRouter } from "expo-router";
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
+  Platform,
   Text,
   TextInput,
   TouchableOpacity,
   View,
-  KeyboardAvoidingView,
-  Platform,
 } from "react-native";
 import { supabase } from "../lib/supabase";
 
@@ -19,19 +19,7 @@ export default function LoginScreen() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // Si ya existe una sesión, navegar
-  useEffect(() => {
-    (async () => {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
 
-      if (session?.user) {
-        router.replace("/(tabs)/loans-historyScreen");
-
-      }
-    })();
-  }, [router]);
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -177,7 +165,13 @@ export default function LoginScreen() {
           )}
         </TouchableOpacity>
 
+        <TouchableOpacity onPress={() => router.push("/signUpScreen")} style={{ marginTop: 20 }}>
+          <Text style={{ color: "#2563eb", fontSize: 16 }}>
+            ¿No tienes cuenta? Registrate
+          </Text>
+        </TouchableOpacity>
+
       </View>
-    </KeyboardAvoidingView>
+    </KeyboardAvoidingView >
   );
 }

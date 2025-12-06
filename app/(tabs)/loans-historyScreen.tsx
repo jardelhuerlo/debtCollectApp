@@ -7,12 +7,14 @@
 
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import type { Session } from "@supabase/supabase-js";
-import { useEffect, useState } from "react";
+import { useFocusEffect } from "expo-router";
+import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
   FlatList,
   Modal,
+  RefreshControl,
   ScrollView,
   Text,
   TextInput,
@@ -51,6 +53,7 @@ export default function LoansHistoryScreen() {
 
   const [loans, setLoans] = useState<Loan[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+  const [refreshing, setRefreshing] = useState(false);
 
   // Modal de detalles
   const [selectedLoan, setSelectedLoan] = useState<Loan | null>(null);
@@ -68,23 +71,9 @@ export default function LoansHistoryScreen() {
 
 
   // -------------------- LOAD LOANS --------------------
-  useEffect(() => {
-    loadLoans();
-  }, []);
-
-  useEffect(() => {
-    if (!selectedLoan) return;
-
-    const amount = parseFloat(paymentAmount);
-    if (isNaN(amount)) {
-      setNewRemaining(selectedLoan.remaining);
-    } else {
-      setNewRemaining(selectedLoan.remaining - amount);
-    }
-  }, [paymentAmount, selectedLoan]);
-
   const loadLoans = async () => {
-    setLoading(true);
+    // Only show full loading spinner if not refreshing (to avoid double spinners)
+    if (!refreshing) setLoading(true);
 
     const {
       data: { session },
@@ -107,6 +96,29 @@ export default function LoansHistoryScreen() {
 
     setLoading(false);
   };
+
+  useFocusEffect(
+    useCallback(() => {
+      loadLoans();
+    }, [])
+  );
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await loadLoans();
+    setRefreshing(false);
+  }, []);
+
+  useEffect(() => {
+    if (!selectedLoan) return;
+
+    const amount = parseFloat(paymentAmount);
+    if (isNaN(amount)) {
+      setNewRemaining(selectedLoan.remaining);
+    } else {
+      setNewRemaining(selectedLoan.remaining - amount);
+    }
+  }, [paymentAmount, selectedLoan]);
 
   // -------------------- REGISTRAR PAGO --------------------
   const registerPayment = async () => {
@@ -320,7 +332,7 @@ export default function LoansHistoryScreen() {
         Préstamos
       </Text>
 
-      {loading ? (
+      {loading && !refreshing ? (
         <ActivityIndicator size="large" />
       ) : (
         <FlatList
@@ -328,6 +340,9 @@ export default function LoansHistoryScreen() {
           keyExtractor={(item) => item.id}
           renderItem={renderLoan}
           showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          }
         />
       )}
 
