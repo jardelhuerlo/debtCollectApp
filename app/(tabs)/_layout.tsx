@@ -20,22 +20,22 @@ export default function TabLayout() {
       <Tabs.Screen
         name="loans-historyScreen"
         options={{
-          title: 'Historial',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="house.fill" color={color} />,
+          title: 'Préstamo',
+          tabBarIcon: ({ color }) => <IconSymbol size={28} name="banknote.fill" color={color} />,
         }}
       />
       <Tabs.Screen
         name="loansScreen"
         options={{
           title: 'Registro',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="paperplane.fill" color={color} />,
+          tabBarIcon: ({ color }) => <IconSymbol size={28} name="plus.circle.fill" color={color} />,
         }}
       />
       <Tabs.Screen
         name="userScreen"
         options={{
           title: 'Usuario',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="paperplane.fill" color={color} />,
+          tabBarIcon: ({ color }) => <IconSymbol size={28} name="person.fill" color={color} />,
         }}
       />
     </Tabs>
