@@ -25,7 +25,6 @@ export default function ProfileScreen() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
 
-  // 🟦 FIX: useCallback para evitar el warning de dependencias en useEffect
   const loadProfile = useCallback(async () => {
     setLoading(true);
 
@@ -34,7 +33,6 @@ export default function ProfileScreen() {
     }: { data: { session: Session | null } } = await supabase.auth.getSession();
 
     if (!session) {
-      console.warn("No hay sesión activa");
       router.replace("/loginScreen");
       return;
     }
@@ -46,6 +44,7 @@ export default function ProfileScreen() {
       .single();
 
     if (!error && data) {
+      // ✅ SOLO mostrar los datos, NO redirigir nunca
       setProfile(data as Profile);
     } else {
       console.error("Error cargando perfil:", error);
@@ -54,7 +53,6 @@ export default function ProfileScreen() {
     setLoading(false);
   }, [router]);
 
-  // 🟦 FIX: ahora el effect no muestra warning
   useEffect(() => {
     loadProfile();
   }, [loadProfile]);
@@ -111,7 +109,6 @@ export default function ProfileScreen() {
         justifyContent: "space-between",
       }}
     >
-      {/* FOTO CON INICIALES */}
       <View style={{ alignItems: "center" }}>
         <View
           style={{
@@ -134,7 +131,6 @@ export default function ProfileScreen() {
           </Text>
         </View>
 
-        {/* CARD INFORMACIÓN */}
         <View
           style={{
             backgroundColor: "#fff",
@@ -155,9 +151,11 @@ export default function ProfileScreen() {
           <Text style={{ fontSize: 16, color: "#555", marginBottom: 8 }}>
             🔹 Rol: {profile.role}
           </Text>
+
           <Text style={{ fontSize: 16, color: "#555", marginBottom: 8 }}>
             🔹 Estado: {profile.is_active ? "Activo" : "Inactivo"}
           </Text>
+
           {profile.subscription_expires && (
             <Text style={{ fontSize: 16, color: "#555" }}>
               🔹 Suscripción expira:{" "}
@@ -174,7 +172,6 @@ export default function ProfileScreen() {
         </View>
       </View>
 
-      {/* BOTÓN CERRAR SESIÓN */}
       <TouchableOpacity
         style={{
           backgroundColor: "#ff4d4d",

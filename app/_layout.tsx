@@ -30,22 +30,56 @@ export default function RootLayout() {
   useEffect(() => {
     if (loading) return;
 
-    const inTabsGroup = segments[0] === "(tabs)";
-    const inPublicRoute =
-      segments[0] === "loginScreen" || segments[0] === "signUpScreen";
+    const firstSegment = segments[0];
 
-    if (session) {
-      // If user is authenticated and on login/signup OR on root (empty segments), redirect to home
-      if (inPublicRoute || segments.length === 0) {
-        router.replace("/(tabs)/loans-historyScreen");
+    const isAuthScreen =
+      firstSegment === "loginScreen" ||
+      firstSegment === "signUpScreen";
+
+    const isUserScreen =
+      firstSegment === "(tabs)" &&
+      segments[1] === "userScreen";
+
+    const isLoansScreen =
+      firstSegment === "(tabs)" &&
+      (segments[1] === "loans-historyScreen" ||
+        segments[1] === "loansScreen");
+
+    const checkAccess = async () => {
+      if (!session) {
+        if (!isAuthScreen) router.replace("/loginScreen");
+        return;
       }
-    } else {
-      // If user is not authenticated and NOT on login/signup, redirect to login
-      if (!inPublicRoute) {
-        router.replace("/loginScreen");
+
+      // Consultar estado de suscripción
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("is_active, subscription_expires")
+        .eq("id", session.user.id)
+        .single();
+
+      if (!profile) return;
+
+      const now = new Date();
+      const expiresAt = profile.subscription_expires
+        ? new Date(profile.subscription_expires)
+        : null;
+
+      const isExpired =
+        !profile.is_active ||
+        (expiresAt ? expiresAt <= now : true);
+
+      // ✅ BLOQUEO SOLO PARA LOANS
+      if (isExpired && isLoansScreen) {
+        router.replace("/subscriptionExpiredScreen");
+        return;
       }
-    }
+
+    };
+
+    checkAccess();
   }, [session, loading, segments]);
+
 
   if (loading) {
     return (
