@@ -10,7 +10,8 @@ import { supabase } from '@/lib/supabase';
 export default function TabLayout() {
   const colorScheme = useColorScheme();
   const [initialRoute, setInitialRoute] = useState<string | null>(null);
-
+  const activeColor = "#4f9cff";   // 🔵 celeste activo
+  const inactiveColor = "#9ca3af"; // gris inactivo
   useEffect(() => {
     const loadInitialRoute = async () => {
       const { data: { session } } = await supabase.auth.getSession();
@@ -59,9 +60,19 @@ export default function TabLayout() {
     <Tabs
       initialRouteName={initialRoute}
       screenOptions={{
-        tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
         headerShown: false,
         tabBarButton: HapticTab,
+        tabBarActiveTintColor: activeColor,
+        tabBarInactiveTintColor: inactiveColor,
+        tabBarStyle: {
+          backgroundColor: "#ffffff",
+          borderTopWidth: 0,
+          elevation: 8,
+        },
+        tabBarLabelStyle: {
+          fontSize: 12,
+          fontWeight: "600",
+        },
       }}
     >
       <Tabs.Screen

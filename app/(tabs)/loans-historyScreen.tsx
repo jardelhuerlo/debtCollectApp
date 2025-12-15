@@ -1,10 +1,3 @@
-// ❗ Solo agregué —trash.fill— al mapping de IconSymbol
-// Ve a tu archivo icon-symbol.tsx y agrega esta línea al MAPPING:
-//
-// "trash.fill": "delete",
-//
-// Ya con eso tu icono funciona perfecto.
-
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import type { Session } from "@supabase/supabase-js";
 import { useFocusEffect } from "expo-router";
@@ -45,6 +38,7 @@ interface Payment {
   payer_id: string;
   amount: number;
   note: string | null;
+  method: string | null;
   created_at: string;
 }
 
@@ -68,6 +62,7 @@ export default function LoansHistoryScreen() {
   const [newRemaining, setNewRemaining] = useState<number | null>(null);
   const [processing, setProcessing] = useState(false);
   const [paymentNote, setPaymentNote] = useState<string>("");
+  const [paymentMethod, setPaymentMethod] = useState<string>("efectivo");
 
 
   // -------------------- LOAD LOANS --------------------
@@ -123,7 +118,7 @@ export default function LoansHistoryScreen() {
   // -------------------- REGISTRAR PAGO --------------------
   const registerPayment = async () => {
     if (!selectedLoan) return;
-    setPaymentNote(""); ////
+
     // ❗ EVITAR PAGAR SI YA ESTÁ EN 0
     if (selectedLoan.remaining <= 0) {
       Alert.alert("Completado", "Este préstamo ya está completamente pagado.");
@@ -138,35 +133,90 @@ export default function LoansHistoryScreen() {
 
     setProcessing(true);
 
-    const { data, error } = await supabase.rpc("process_payment", {
-      p_loan_id: selectedLoan.id,
-      p_payer_id: selectedLoan.owner_id,
-      p_amount: amount,
-      p_note: paymentNote || null,
-    });
+    try {
+      const { error } = await supabase.rpc("process_payment", {
+        p_loan_id: selectedLoan.id,
+        p_payer_id: selectedLoan.owner_id,
+        p_amount: amount,
+        p_note: paymentNote || null,
+        p_method: paymentMethod, // Usar el método seleccionado
+      });
 
-    setProcessing(false);
+      if (error) throw error;
 
-    if (error) {
+      Alert.alert("Éxito", "Pago registrado correctamente.");
+
+      loadLoans();
+      setModalVisible(false);
+      setPaymentAmount("");
+      setNewRemaining(null);
+      setPaymentMethod("efectivo"); // Resetear a valor por defecto
+      setPaymentNote("");
+    } catch (error) {
       console.error(error);
       Alert.alert("Error", "No se pudo registrar el pago.");
-      return;
+    } finally {
+      setProcessing(false);
     }
+  };
 
-    // ❗ IMPORTANTE → si el pago deja remaining = 0, marcar como "pagado"
-    if (data?.updated_remaining === 0) {
-      await supabase
-        .from("loans")
-        .update({ status: "pagado" })
-        .eq("id", selectedLoan.id);
-    }
+  // -------------------- REGISTRAR PAGO EN 0 --------------------
+  const registerZeroPayment = async () => {
+    if (!selectedLoan) return;
+    
+    Alert.alert(
+      "Registrar día sin pago",
+      "¿Deseas registrar un día sin pago? Se creará un registro con monto 0.",
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Registrar",
+          style: "default",
+          onPress: async () => {
+            setProcessing(true);
 
-    Alert.alert("Éxito", "Pago registrado correctamente.");
+            // Crear nota con fecha actual
+            const currentDate = new Date().toLocaleDateString('es-ES', {
+              weekday: 'long',
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric'
+            });
+            const zeroPaymentNote = `Día sin pago - ${currentDate}`;
 
-    loadLoans();
-    setModalVisible(false);
-    setPaymentAmount("");
-    setNewRemaining(null);
+            const { data, error } = await supabase.rpc("process_payment", {
+              p_loan_id: selectedLoan.id,
+              p_payer_id: selectedLoan.owner_id,
+              p_amount: 0,
+              p_note: zeroPaymentNote,
+              p_method: "sin_pago",
+            });
+
+            setProcessing(false);
+
+            if (error) {
+              console.error(error);
+              Alert.alert("Error", "No se pudo registrar el día sin pago.");
+              return;
+            }
+
+            Alert.alert("Éxito", "Día sin pago registrado correctamente.");
+            
+            // Cerrar el modal de detalles
+            setModalVisible(false);
+            
+            // Resetear valores
+            setPaymentAmount("");
+            setNewRemaining(null);
+            setPaymentMethod("efectivo");
+            setPaymentNote("");
+            
+            // Recargar préstamos
+            loadLoans();
+          },
+        },
+      ]
+    );
   };
 
   // -------------------- ELIMINAR --------------------
@@ -328,7 +378,7 @@ export default function LoansHistoryScreen() {
         backgroundColor: "#f5f5f5",
       }}
     >
-      <Text style={{ fontSize: 20, fontWeight: "bold", marginBottom: 10 }}>
+      <Text style={{ fontSize: 25, fontWeight: "bold", marginBottom: 10 }}>
         Préstamos
       </Text>
 
@@ -410,6 +460,47 @@ export default function LoansHistoryScreen() {
                         keyboardType="numeric"
                       />
                     </View>
+
+                    {/* SELECTOR DE MÉTODO DE PAGO */}
+                    <Text style={{ marginTop: 15, fontWeight: "bold" }}>Método de pago:</Text>
+                    <View style={{ flexDirection: "row", marginTop: 8, gap: 10 }}>
+                      <TouchableOpacity
+                        style={{
+                          flex: 1,
+                          padding: 12,
+                          borderRadius: 8,
+                          backgroundColor: paymentMethod === "efectivo" ? "#4CAF50" : "#f0f0f0",
+                          alignItems: "center",
+                        }}
+                        onPress={() => setPaymentMethod("efectivo")}
+                      >
+                        <Text style={{
+                          color: paymentMethod === "efectivo" ? "white" : "black",
+                          fontWeight: paymentMethod === "efectivo" ? "600" : "400"
+                        }}>
+                          💵 Efectivo
+                        </Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={{
+                          flex: 1,
+                          padding: 12,
+                          borderRadius: 8,
+                          backgroundColor: paymentMethod === "transferencia" ? "#4CAF50" : "#f0f0f0",
+                          alignItems: "center",
+                        }}
+                        onPress={() => setPaymentMethod("transferencia")}
+                      >
+                        <Text style={{
+                          color: paymentMethod === "transferencia" ? "white" : "black",
+                          fontWeight: paymentMethod === "transferencia" ? "600" : "400"
+                        }}>
+                          🏦 Transferencia
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+
                     <Text style={{ marginTop: 20, fontWeight: "bold" }}>Nota del pago (opcional):</Text>
 
                     <View
@@ -436,11 +527,33 @@ export default function LoansHistoryScreen() {
                       </Text>
                     </Text>
 
+                    {/* BOTÓN PARA REGISTRAR PAGO EN 0 */}
+                    <TouchableOpacity
+                      style={{
+                        backgroundColor: "#FF9800",
+                        padding: 12,
+                        marginTop: 10,
+                        borderRadius: 10,
+                        alignItems: "center",
+                        flexDirection: "row",
+                        justifyContent: "center",
+                        gap: 8,
+                      }}
+                      onPress={() => registerZeroPayment()}
+                      disabled={processing}
+                    >
+                      <IconSymbol name="exclamationmark.triangle.fill" size={18} color="white" />
+                      <Text style={{ color: "white", fontWeight: "bold" }}>
+                        {processing ? "Procesando..." : "Registrar día sin pago"}
+                      </Text>
+                    </TouchableOpacity>
+
+                    {/* BOTÓN PARA REGISTRAR PAGO NORMAL */}
                     <TouchableOpacity
                       style={{
                         backgroundColor: "#4CAF50",
                         padding: 12,
-                        marginTop: 20,
+                        marginTop: 10,
                         borderRadius: 10,
                         alignItems: "center",
                       }}
@@ -467,6 +580,7 @@ export default function LoansHistoryScreen() {
                     setPaymentAmount("");
                     setNewRemaining(null);
                     setPaymentNote("");
+                    setPaymentMethod("efectivo");
                   }}
                 >
                   <Text>Cerrar</Text>
@@ -503,25 +617,90 @@ export default function LoansHistoryScreen() {
 
             <ScrollView style={{ marginTop: 10 }}>
               {payments.length === 0 ? (
-                <Text>No hay pagos registrados.</Text>
+                <Text style={{ textAlign: "center", color: "#666", marginTop: 20 }}>
+                  No hay pagos registrados.
+                </Text>
               ) : (
-                payments.map((p) => (
-                  <View
-                    key={p.id}
-                    style={{
-                      padding: 12,
-                      backgroundColor: "#eef6ff",
-                      borderRadius: 10,
-                      marginBottom: 10,
-                    }}
-                  >
-                    <Text style={{ fontWeight: "bold" }}>${p.amount}</Text>
-                    {p.note && <Text style={{ marginTop: 3 }}>📝 {p.note}</Text>}
-                    <Text style={{ marginTop: 3, color: "#555" }}>
-                      {new Date(p.created_at).toLocaleString()}
-                    </Text>
-                  </View>
-                ))
+                payments.map((p) => {
+                  // Determinar si es un pago en 0 (día sin pago)
+                  const isZeroPayment = p.amount === 0 || p.method === "sin_pago";
+                  
+                  return (
+                    <View
+                      key={p.id}
+                      style={{
+                        padding: 14,
+                        backgroundColor: isZeroPayment ? "#FFEBEE" : "white",
+                        borderRadius: 12,
+                        marginBottom: 12,
+                        borderLeftWidth: 4,
+                        borderLeftColor: isZeroPayment ? "#F44336" : 
+                                      (p.method === "efectivo" ? "#4CAF50" : "#2196F3"),
+                        shadowColor: "#000",
+                        shadowOffset: { width: 0, height: 1 },
+                        shadowOpacity: 0.05,
+                        shadowRadius: 2,
+                        elevation: 2,
+                      }}
+                    >
+                      <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+                        <View>
+                          <Text style={{ 
+                            fontSize: 18, 
+                            fontWeight: "bold", 
+                            color: isZeroPayment ? "#D32F2F" : "#333"
+                          }}>
+                            ${p.amount}
+                          </Text>
+                          <Text style={{ fontSize: 12, color: "#666", marginTop: 2 }}>
+                            {new Date(p.created_at).toLocaleDateString('es-ES', {
+                              day: '2-digit',
+                              month: 'short',
+                              year: 'numeric'
+                            })}
+                          </Text>
+                        </View>
+                        
+                        <View style={{ 
+                          alignItems: "center",
+                          justifyContent: "center",
+                          backgroundColor: isZeroPayment ? "#FFCDD2" : 
+                                        (p.method === "efectivo" ? "#E8F5E9" : "#E3F2FD"),
+                          paddingHorizontal: 12,
+                          paddingVertical: 6,
+                          borderRadius: 20,
+                        }}>
+                          <Text style={{ 
+                            color: isZeroPayment ? "#D32F2F" : 
+                                  (p.method === "efectivo" ? "#2E7D32" : "#1565C0"),
+                            fontWeight: "600",
+                            fontSize: 12,
+                          }}>
+                            {isZeroPayment ? "⏸️ Sin pago" : 
+                             (p.method === "efectivo" ? "💵 Efectivo" : "🏦 Transferencia")}
+                          </Text>
+                        </View>
+                      </View>
+                      
+                      {p.note && (
+                        <View style={{ 
+                          marginTop: 10,
+                          paddingTop: 10,
+                          borderTopWidth: 1,
+                          borderTopColor: isZeroPayment ? "#FFCDD2" : "#eee"
+                        }}>
+                          <Text style={{ 
+                            fontSize: 13, 
+                            color: isZeroPayment ? "#D32F2F" : "#555", 
+                            fontStyle: "italic"
+                          }}>
+                            📝 {p.note}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                  );
+                })
               )}
             </ScrollView>
 

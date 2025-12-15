@@ -10,6 +10,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "../lib/supabase";
 
 export default function LoginScreen() {
@@ -17,9 +18,8 @@ export default function LoginScreen() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false); // 👁️
   const [loading, setLoading] = useState(false);
-
-
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -43,7 +43,6 @@ export default function LoginScreen() {
 
     if (data.session?.user) {
       router.replace("/(tabs)/loans-historyScreen");
-
     }
   };
 
@@ -61,7 +60,7 @@ export default function LoginScreen() {
           paddingHorizontal: 30,
         }}
       >
-        {/* Avatar con iniciales del sistema */}
+        {/* Avatar */}
         <View
           style={{
             width: 90,
@@ -100,7 +99,7 @@ export default function LoginScreen() {
           Ingresa con tu correo y contraseña para continuar
         </Text>
 
-        {/* Input email */}
+        {/* EMAIL */}
         <TextInput
           placeholder="Correo electrónico"
           placeholderTextColor="#94a3b8"
@@ -120,26 +119,45 @@ export default function LoginScreen() {
           }}
         />
 
-        {/* Input password */}
-        <TextInput
-          placeholder="Contraseña"
-          placeholderTextColor="#94a3b8"
-          secureTextEntry
-          value={password}
-          onChangeText={setPassword}
+        {/* PASSWORD + 👁️ */}
+        <View
           style={{
             width: "100%",
             backgroundColor: "white",
             borderRadius: 12,
-            padding: 14,
             borderWidth: 1,
             borderColor: "#e2e8f0",
             marginBottom: 20,
-            fontSize: 16,
+            flexDirection: "row",
+            alignItems: "center",
           }}
-        />
+        >
+          <TextInput
+            placeholder="Contraseña"
+            placeholderTextColor="#94a3b8"
+            secureTextEntry={!showPassword} // 🔑 asteriscos
+            value={password}
+            onChangeText={setPassword}
+            style={{
+              flex: 1,
+              padding: 14,
+              fontSize: 16,
+            }}
+          />
 
-        {/* Botón */}
+          <TouchableOpacity
+            onPress={() => setShowPassword(!showPassword)}
+            style={{ paddingHorizontal: 14 }}
+          >
+            <Ionicons
+              name={showPassword ? "eye-off" : "eye"}
+              size={22}
+              color="#64748b"
+            />
+          </TouchableOpacity>
+        </View>
+
+        {/* BOTÓN LOGIN */}
         <TouchableOpacity
           onPress={handleLogin}
           disabled={loading}
@@ -165,13 +183,15 @@ export default function LoginScreen() {
           )}
         </TouchableOpacity>
 
-        <TouchableOpacity onPress={() => router.push("/signUpScreen")} style={{ marginTop: 20 }}>
+        <TouchableOpacity
+          onPress={() => router.push("/signUpScreen")}
+          style={{ marginTop: 20 }}
+        >
           <Text style={{ color: "#2563eb", fontSize: 16 }}>
-            ¿No tienes cuenta? Registrate
+            ¿No tienes cuenta? Regístrate
           </Text>
         </TouchableOpacity>
-
       </View>
-    </KeyboardAvoidingView >
+    </KeyboardAvoidingView>
   );
 }

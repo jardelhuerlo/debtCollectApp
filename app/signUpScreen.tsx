@@ -1,4 +1,5 @@
-import * as Linking from 'expo-linking'; 
+import { Ionicons } from "@expo/vector-icons";
+import * as Linking from 'expo-linking';
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
@@ -19,6 +20,7 @@ export default function SignUpScreen() {
   const [fullName, setFullName] = useState("");   // 👈 Nuevo campo
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false); // 👁️
   const [loading, setLoading] = useState(false);
 
   const handleSignUp = async () => {
@@ -120,24 +122,43 @@ export default function SignUpScreen() {
           }}
         />
 
-        {/* Password */}
-        <TextInput
-          placeholder="Contraseña"
-          placeholderTextColor="#94a3b8"
-          secureTextEntry
-          value={password}
-          onChangeText={setPassword}
+        {/* PASSWORD + 👁️ */}
+        <View
           style={{
             width: "100%",
             backgroundColor: "white",
             borderRadius: 12,
-            padding: 14,
             borderWidth: 1,
             borderColor: "#e2e8f0",
             marginBottom: 20,
-            fontSize: 16,
+            flexDirection: "row",
+            alignItems: "center",
           }}
-        />
+        >
+          <TextInput
+            placeholder="Contraseña"
+            placeholderTextColor="#94a3b8"
+            secureTextEntry={!showPassword} // 🔑 asteriscos
+            value={password}
+            onChangeText={setPassword}
+            style={{
+              flex: 1,
+              padding: 14,
+              fontSize: 16,
+            }}
+          />
+
+          <TouchableOpacity
+            onPress={() => setShowPassword(!showPassword)}
+            style={{ paddingHorizontal: 14 }}
+          >
+            <Ionicons
+              name={showPassword ? "eye-off" : "eye"}
+              size={22}
+              color="#64748b"
+            />
+          </TouchableOpacity>
+        </View>
 
         {/* Botón */}
         <TouchableOpacity
