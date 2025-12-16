@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "debtCollectApp",
+    "name": "PayTrack",
     "slug": "debtCollectApp-v2",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -10,8 +10,8 @@
     "android": {
       "package": "com.debtcollect.app",
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundColor": "#E6F4FE"
+        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "backgroundColor": "#FFFFFF"
       },
       "permissions": [
         "INTERNET"
@@ -46,6 +46,11 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "splash": {
+      "image": "./assets/images/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
     }
   }
 }

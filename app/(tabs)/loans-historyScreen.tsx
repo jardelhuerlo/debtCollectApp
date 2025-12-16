@@ -1,6 +1,8 @@
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import type { Session } from "@supabase/supabase-js";
+import * as Print from 'expo-print';
 import { useFocusEffect } from "expo-router";
+import { shareAsync } from 'expo-sharing';
 import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -56,6 +58,8 @@ export default function LoansHistoryScreen() {
   // Modal de pagos
   const [paymentsModal, setPaymentsModal] = useState(false);
   const [payments, setPayments] = useState<Payment[]>([]);
+  // Store the loan associated with the current payments view for PDF generation
+  const [historyLoan, setHistoryLoan] = useState<Loan | null>(null);
 
   // Campos del pago
   const [paymentAmount, setPaymentAmount] = useState<string>("");
@@ -115,6 +119,83 @@ export default function LoansHistoryScreen() {
     }
   }, [paymentAmount, selectedLoan]);
 
+  // -------------------- GENERATE PDF --------------------
+  const generatePDF = async () => {
+    if (!historyLoan) {
+      Alert.alert("Error", "No se encontró información del préstamo.");
+      return;
+    }
+
+    const htmlContent = `
+      <html>
+        <head>
+          <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no" />
+          <style>
+            body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; padding: 20px; }
+            h1 { text-align: center; color: #333; }
+            .header { margin-bottom: 20px; padding: 10px; border: 1px solid #ddd; border-radius: 8px; background-color: #f9f9f9; }
+            .header p { margin: 5px 0; font-size: 14px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+            th, td { border: 1px solid #ddd; padding: 8px; text-align: left; font-size: 12px; }
+            th { background-color: #f2f2f2; font-weight: bold; }
+            .amount { font-weight: bold; }
+            .footer { margin-top: 30px; text-align: center; font-size: 10px; color: #888; }
+            .status-badge { display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: bold; }
+          </style>
+        </head>
+        <body>
+          <h1>Reporte de Pagos</h1>
+          
+          <div class="header">
+            <p><strong>Cliente:</strong> ${historyLoan.debtor_name}</p>
+            <p><strong>Monto Original:</strong> $${historyLoan.original_amount}</p>
+            <p><strong>Restante:</strong> $${historyLoan.remaining}</p>
+            <p><strong>Interés:</strong> ${historyLoan.interes}%</p>
+            <p><strong>Estado:</strong> ${historyLoan.status}</p>
+            <p><strong>Fecha Inicio:</strong> ${new Date(historyLoan.created_at).toLocaleDateString()}</p>
+          </div>
+
+          <table>
+            <thead>
+              <tr>
+                <th>Fecha</th>
+                <th>Monto</th>
+                <th>Método</th>
+                <th>Nota</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${payments.map(p => {
+      const isZeroPayment = p.amount === 0 || p.method === "sin_pago";
+      const methodText = isZeroPayment ? "Sin pago" : (p.method === "efectivo" ? "Efectivo" : "Transferencia");
+      return `
+                  <tr style="background-color: ${isZeroPayment ? '#fff0f0' : '#fff'}">
+                    <td>${new Date(p.created_at).toLocaleDateString()} ${new Date(p.created_at).toLocaleTimeString()}</td>
+                    <td class="amount">$${p.amount}</td>
+                    <td>${methodText}</td>
+                    <td>${p.note || '-'}</td>
+                  </tr>
+                `;
+    }).join('')}
+            </tbody>
+          </table>
+
+          <div class="footer">
+            <p>Generado automáticamente desde DebtCollectApp</p>
+          </div>
+        </body>
+      </html>
+    `;
+
+    try {
+      const { uri } = await Print.printToFileAsync({ html: htmlContent });
+      await shareAsync(uri, { UTI: '.pdf', mimeType: 'application/pdf' });
+    } catch (error) {
+      console.error(error);
+      Alert.alert("Error", "No se pudo generar el PDF");
+    }
+  };
+
   // -------------------- REGISTRAR PAGO --------------------
   const registerPayment = async () => {
     if (!selectedLoan) return;
@@ -163,7 +244,7 @@ export default function LoansHistoryScreen() {
   // -------------------- REGISTRAR PAGO EN 0 --------------------
   const registerZeroPayment = async () => {
     if (!selectedLoan) return;
-    
+
     Alert.alert(
       "Registrar día sin pago",
       "¿Deseas registrar un día sin pago? Se creará un registro con monto 0.",
@@ -201,16 +282,16 @@ export default function LoansHistoryScreen() {
             }
 
             Alert.alert("Éxito", "Día sin pago registrado correctamente.");
-            
+
             // Cerrar el modal de detalles
             setModalVisible(false);
-            
+
             // Resetear valores
             setPaymentAmount("");
             setNewRemaining(null);
             setPaymentMethod("efectivo");
             setPaymentNote("");
-            
+
             // Recargar préstamos
             loadLoans();
           },
@@ -252,6 +333,7 @@ export default function LoansHistoryScreen() {
       return;
     }
 
+    setHistoryLoan(loans.find(l => l.id === loanId) || null);
     setPayments(data as Payment[]);
     setPaymentsModal(true);
   };
@@ -624,7 +706,7 @@ export default function LoansHistoryScreen() {
                 payments.map((p) => {
                   // Determinar si es un pago en 0 (día sin pago)
                   const isZeroPayment = p.amount === 0 || p.method === "sin_pago";
-                  
+
                   return (
                     <View
                       key={p.id}
@@ -634,8 +716,8 @@ export default function LoansHistoryScreen() {
                         borderRadius: 12,
                         marginBottom: 12,
                         borderLeftWidth: 4,
-                        borderLeftColor: isZeroPayment ? "#F44336" : 
-                                      (p.method === "efectivo" ? "#4CAF50" : "#2196F3"),
+                        borderLeftColor: isZeroPayment ? "#F44336" :
+                          (p.method === "efectivo" ? "#4CAF50" : "#2196F3"),
                         shadowColor: "#000",
                         shadowOffset: { width: 0, height: 1 },
                         shadowOpacity: 0.05,
@@ -645,9 +727,9 @@ export default function LoansHistoryScreen() {
                     >
                       <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
                         <View>
-                          <Text style={{ 
-                            fontSize: 18, 
-                            fontWeight: "bold", 
+                          <Text style={{
+                            fontSize: 18,
+                            fontWeight: "bold",
                             color: isZeroPayment ? "#D32F2F" : "#333"
                           }}>
                             ${p.amount}
@@ -660,38 +742,38 @@ export default function LoansHistoryScreen() {
                             })}
                           </Text>
                         </View>
-                        
-                        <View style={{ 
+
+                        <View style={{
                           alignItems: "center",
                           justifyContent: "center",
-                          backgroundColor: isZeroPayment ? "#FFCDD2" : 
-                                        (p.method === "efectivo" ? "#E8F5E9" : "#E3F2FD"),
+                          backgroundColor: isZeroPayment ? "#FFCDD2" :
+                            (p.method === "efectivo" ? "#E8F5E9" : "#E3F2FD"),
                           paddingHorizontal: 12,
                           paddingVertical: 6,
                           borderRadius: 20,
                         }}>
-                          <Text style={{ 
-                            color: isZeroPayment ? "#D32F2F" : 
-                                  (p.method === "efectivo" ? "#2E7D32" : "#1565C0"),
+                          <Text style={{
+                            color: isZeroPayment ? "#D32F2F" :
+                              (p.method === "efectivo" ? "#2E7D32" : "#1565C0"),
                             fontWeight: "600",
                             fontSize: 12,
                           }}>
-                            {isZeroPayment ? "⏸️ Sin pago" : 
-                             (p.method === "efectivo" ? "💵 Efectivo" : "🏦 Transferencia")}
+                            {isZeroPayment ? "⏸️ Sin pago" :
+                              (p.method === "efectivo" ? "💵 Efectivo" : "🏦 Transferencia")}
                           </Text>
                         </View>
                       </View>
-                      
+
                       {p.note && (
-                        <View style={{ 
+                        <View style={{
                           marginTop: 10,
                           paddingTop: 10,
                           borderTopWidth: 1,
                           borderTopColor: isZeroPayment ? "#FFCDD2" : "#eee"
                         }}>
-                          <Text style={{ 
-                            fontSize: 13, 
-                            color: isZeroPayment ? "#D32F2F" : "#555", 
+                          <Text style={{
+                            fontSize: 13,
+                            color: isZeroPayment ? "#D32F2F" : "#555",
                             fontStyle: "italic"
                           }}>
                             📝 {p.note}
@@ -704,11 +786,29 @@ export default function LoansHistoryScreen() {
               )}
             </ScrollView>
 
+            {/* BOTÓN DESCARGAR PDF */}
+            <TouchableOpacity
+              style={{
+                backgroundColor: "#2196F3",
+                padding: 12,
+                marginTop: 15,
+                borderRadius: 10,
+                alignItems: "center",
+                flexDirection: "row",
+                justifyContent: "center",
+                gap: 8,
+              }}
+              onPress={generatePDF}
+            >
+              <IconSymbol name="square.and.arrow.up" size={18} color="white" />
+              <Text style={{ color: "white", fontWeight: "bold" }}>Descargar PDF</Text>
+            </TouchableOpacity>
+
             <TouchableOpacity
               style={{
                 backgroundColor: "#ddd",
                 padding: 10,
-                marginTop: 15,
+                marginTop: 10,
                 borderRadius: 10,
                 alignItems: "center",
               }}

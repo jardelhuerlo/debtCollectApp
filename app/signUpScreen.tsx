@@ -145,6 +145,7 @@ export default function SignUpScreen() {
               flex: 1,
               padding: 14,
               fontSize: 16,
+              color: "#1e293b",
             }}
           />
 

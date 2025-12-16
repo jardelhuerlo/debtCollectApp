@@ -1,8 +1,10 @@
+import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Image,
   KeyboardAvoidingView,
   Platform,
   Text,
@@ -10,7 +12,6 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "../lib/supabase";
 
 export default function LoginScreen() {
@@ -72,9 +73,13 @@ export default function LoginScreen() {
             marginBottom: 25,
           }}
         >
-          <Text style={{ fontSize: 36, fontWeight: "bold", color: "#2563eb" }}>
-            IN
-          </Text>
+          {/* <Text style={{ fontSize: 36, fontWeight: "bold", color: "#2563eb" }}>
+            PT
+          </Text> */}
+          <Image
+            source={require("../assets/images/icon.png")}
+            style={{ width: 90, height: 90, borderRadius: 25 }}
+          />
         </View>
 
         <Text
@@ -142,6 +147,7 @@ export default function LoginScreen() {
               flex: 1,
               padding: 14,
               fontSize: 16,
+              color: "#1e293b",
             }}
           />
 
