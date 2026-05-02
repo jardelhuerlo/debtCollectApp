@@ -1,247 +1,243 @@
-import React, { useState } from "react";
+import React from "react";
 import {
   ActivityIndicator,
-  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
   Text,
   TextInput,
   TouchableOpacity,
   View,
+  StyleSheet,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { supabase } from "../../lib/supabase";
+import { useForm, Controller } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import * as Haptics from "expo-haptics";
+import { useCreateLoanMutation } from "@/hooks/useQueryLoans";
+import { loanSchema } from "@/lib/validation";
+import { showSuccess, showError } from "@/lib/toast";
+import { logger } from "@/lib/logger";
+import { Colors, FontSize, Radius, Spacing, Styles } from "@/constants/styles";
+import type { PaymentMethod } from "@/types";
 
-interface LoanForm {
-  debtor_name: string;
-  interes: string;
-  amount: string;
-  payment_method: "efectivo" | "transferencia";
-  note: string;
-}
+type LoanForm = z.infer<typeof loanSchema>;
 
 export default function LoansScreen() {
-  const [form, setForm] = useState<LoanForm>({
-    debtor_name: "",
-    interes: "",
-    amount: "",
-    payment_method: "efectivo",
-    note: "",
+  const createLoanMutation = useCreateLoanMutation();
+
+  const {
+    control,
+    handleSubmit,
+    formState: { errors },
+    clearErrors,
+    watch,
+  } = useForm<LoanForm>({
+    resolver: zodResolver(loanSchema),
+    defaultValues: {
+      debtor_name: "",
+      amount: "",
+      interes: "",
+      payment_method: "efectivo",
+      note: "",
+    },
+    mode: "onSubmit",
   });
 
-  const [loading, setLoading] = useState(false);
+  const amount = watch("amount");
+  const interes = watch("interes");
 
-  const updateField = <K extends keyof LoanForm>(key: K, value: LoanForm[K]) => {
-    setForm({ ...form, [key]: value });
-  };
-
-  /** ***********************
-   * CÁLCULO SOLO VISUAL (NO SE GUARDA)
-   **************************/
   const calculatePreview = () => {
-    const amount = Number(form.amount);
-    const interes = Number(form.interes);
-
-    if (isNaN(amount) || isNaN(interes)) return null;
-
-    return amount + amount * (interes / 100);
+    const a = Number(amount);
+    const i = Number(interes);
+    if (isNaN(a) || isNaN(i) || a <= 0 || i < 0) return null;
+    return a + a * (i / 100);
   };
 
-  /** ***********************
-   * CREAR PRÉSTAMO (RPC REAL)
-   **************************/
-  const createLoan = async () => {
-    if (!form.debtor_name || !form.amount) {
-      Alert.alert("Error", "El nombre y el monto son obligatorios.");
-      return;
-    }
-
-    if (isNaN(Number(form.amount))) {
-      Alert.alert("Error", "El monto debe ser un número válido.");
-      return;
-    }
-
-    if (isNaN(Number(form.interes))) {
-      Alert.alert("Error", "El interés debe ser un número válido.");
-      return;
-    }
-
-    setLoading(true);
-
-    const { data } = await supabase.auth.getUser();
-    const user = data?.user;
-
-    if (!user) {
-      Alert.alert("Error", "No hay usuario autenticado.");
-      setLoading(false);
-      return;
-    }
-
-    // Llamada a la función RPC en supabase
-    const { error } = await supabase.rpc("create_loan_with_interest", {
-      p_owner_id: user.id,
-      p_debtor_name: form.debtor_name,
-      p_amount: Number(form.amount),
-      p_interes: Number(form.interes),
-      p_payment_method: form.payment_method,
-      p_note: form.note || "",
-    });
-
-    setLoading(false);
-
-    if (error) {
-      Alert.alert("Error al registrar", error.message);
-    } else {
-      Alert.alert("Éxito", "Préstamo registrado correctamente.");
-      setForm({
-        debtor_name: "",
-        amount: "",
-        interes: "",
-        payment_method: "efectivo",
-        note: "",
-      });
-    }
+  const onSubmit = (data: LoanForm) => {
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    createLoanMutation.mutate(
+      {
+        debtorName: data.debtor_name,
+        amount: Number(data.amount),
+        interes: Number(data.interes),
+        paymentMethod: data.payment_method,
+        note: data.note || "",
+      },
+      {
+        onSuccess: () => {
+          showSuccess("Éxito", "Préstamo registrado correctamente.");
+          clearErrors();
+        },
+        onError: (error) => {
+          logger.error("Create loan failed", error);
+          showError("Error", "No se pudo registrar el préstamo.");
+        },
+      }
+    );
   };
 
-  /** ***********************
-   * UI
-   **************************/
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
-      <View style={{ padding: 20 }}>
-        <Text
-          style={{
-            fontSize: 24,
-            fontWeight: "bold",
-            marginBottom: 20,
-          }}
-        >
-          Registrar Préstamo
-        </Text>
+    <KeyboardAvoidingView
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      style={{ flex: 1 }}
+      keyboardVerticalOffset={Platform.OS === "ios" ? 60 : 0}
+    >
+      <SafeAreaView style={Styles.screen}>
+        <ScrollView contentContainerStyle={s.container} keyboardShouldPersistTaps="handled">
+          <Text style={s.heading}>Registrar Préstamo</Text>
 
-        {/* Nombre */}
-        <Text style={styles.label}>Nombre del cliente</Text>
-        <TextInput
-          value={form.debtor_name}
-          placeholder="Ej: Juan Pérez"
-          onChangeText={(v) => updateField("debtor_name", v)}
-          style={styles.input}
-        />
-
-        {/* Monto */}
-        <Text style={styles.label}>Monto del préstamo</Text>
-        <TextInput
-          value={form.amount}
-          placeholder="Ej: 150.00"
-          keyboardType="numeric"
-          onChangeText={(v) => updateField("amount", v)}
-          style={styles.input}
-        />
-
-        {/* Interés */}
-        <Text style={styles.label}>Interés (%)</Text>
-        <TextInput
-          value={form.interes}
-          placeholder="Ej: 10"
-          keyboardType="numeric"
-          onChangeText={(v) => updateField("interes", v)}
-          style={styles.input}
-        />
-
-        {/* Mostrar cálculo visual */}
-        {calculatePreview() !== null && (
-          <Text style={styles.preview}>
-            Total con interés: {calculatePreview()?.toFixed(2)} USD
-          </Text>
-        )}
-
-        {/* Método de pago */}
-        <Text style={styles.label}>Método de pago</Text>
-        <View style={{ flexDirection: "row", marginVertical: 10 }}>
-          {["efectivo", "transferencia"].map((method) => (
-            <TouchableOpacity
-              key={method}
-              onPress={() =>
-                updateField("payment_method", method as LoanForm["payment_method"])
-              }
-              style={{
-                padding: 10,
-                borderRadius: 10,
-                backgroundColor:
-                  form.payment_method === method ? "#4CAF50" : "#eee",
-                marginRight: 10,
-              }}
-            >
-              <Text
-                style={{
-                  color: form.payment_method === method ? "#fff" : "#000",
-                  fontWeight: "bold",
-                  textTransform: "capitalize",
+          <Text style={Styles.label}>Nombre del cliente</Text>
+          <Controller
+            control={control}
+            name="debtor_name"
+            render={({ field: { onChange, value } }) => (
+              <TextInput
+                placeholder="Ej: Juan Pérez"
+                placeholderTextColor={Colors.placeholder}
+                value={value}
+                onChangeText={(text) => {
+                  onChange(text);
+                  if (errors.debtor_name) clearErrors("debtor_name");
                 }}
-              >
-                {method}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+                style={[Styles.input, errors.debtor_name && Styles.inputDanger]}
+              />
+            )}
+          />
+          {errors.debtor_name && <Text style={Styles.error}>{errors.debtor_name.message}</Text>}
 
-        {/* Nota */}
-        <Text style={styles.label}>Nota (opcional)</Text>
-        <TextInput
-          value={form.note}
-          placeholder="Ej: Cliente paga puntual..."
-          onChangeText={(v) => updateField("note", v)}
-          style={[styles.input, { minHeight: 80, textAlignVertical: "top" }]}
-          multiline
-        />
+          <Text style={Styles.label}>Monto del préstamo</Text>
+          <Controller
+            control={control}
+            name="amount"
+            render={({ field: { onChange, value } }) => (
+              <TextInput
+                placeholder="Ej: 150.00"
+                placeholderTextColor={Colors.placeholder}
+                keyboardType="numeric"
+                value={value}
+                onChangeText={(text) => {
+                  onChange(text);
+                  if (errors.amount) clearErrors("amount");
+                }}
+                style={[Styles.input, errors.amount && Styles.inputDanger]}
+              />
+            )}
+          />
+          {errors.amount && <Text style={Styles.error}>{errors.amount.message}</Text>}
 
-        {/* Botón */}
-        <TouchableOpacity
-          onPress={createLoan}
-          disabled={loading}
-          style={styles.button}
-        >
-          {loading && (
-            <ActivityIndicator color="#fff" style={{ marginRight: 10 }} />
+          <Text style={Styles.label}>Interés (%)</Text>
+          <Controller
+            control={control}
+            name="interes"
+            render={({ field: { onChange, value } }) => (
+              <TextInput
+                placeholder="Ej: 10"
+                placeholderTextColor={Colors.placeholder}
+                keyboardType="numeric"
+                value={value}
+                onChangeText={(text) => {
+                  onChange(text);
+                  if (errors.interes) clearErrors("interes");
+                }}
+                style={[Styles.input, errors.interes && Styles.inputDanger]}
+              />
+            )}
+          />
+          {errors.interes && <Text style={Styles.error}>{errors.interes.message}</Text>}
+
+          {calculatePreview() !== null && (
+            <Text style={s.preview}>Total con interés: {calculatePreview()?.toFixed(2)} USD</Text>
           )}
-          <Text style={styles.buttonText}>Guardar Préstamo</Text>
-        </TouchableOpacity>
-      </View>
-    </SafeAreaView>
+
+          <Text style={Styles.label}>Método de pago</Text>
+          <View style={s.payRow}>
+            {(["efectivo", "transferencia"] as const).map((method) => (
+              <Controller
+                key={method}
+                control={control}
+                name="payment_method"
+                render={({ field: { onChange, value } }) => (
+                  <TouchableOpacity
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      onChange(method);
+                    }}
+                    style={[
+                      s.payOption,
+                      { backgroundColor: value === method ? Colors.paymentEfectivo : "#eee" },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        s.payOptionText,
+                        { color: value === method ? Colors.surface : Colors.text },
+                      ]}
+                    >
+                      {method}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              />
+            ))}
+          </View>
+
+          <Text style={Styles.label}>Nota (opcional)</Text>
+          <Controller
+            control={control}
+            name="note"
+            render={({ field: { onChange, value } }) => (
+              <TextInput
+                placeholder="Ej: Cliente paga puntual..."
+                placeholderTextColor={Colors.placeholder}
+                value={value}
+                onChangeText={onChange}
+                style={[Styles.input, s.noteInput]}
+                multiline
+              />
+            )}
+          />
+
+          <TouchableOpacity
+            onPress={handleSubmit(onSubmit)}
+            disabled={createLoanMutation.isPending}
+            style={[s.saveBtn, createLoanMutation.isPending && { opacity: 0.6 }]}
+          >
+            {createLoanMutation.isPending && (
+              <ActivityIndicator color="#fff" style={{ marginRight: 10 }} />
+            )}
+            <Text style={s.saveBtnText}>Guardar Préstamo</Text>
+          </TouchableOpacity>
+        </ScrollView>
+      </SafeAreaView>
+    </KeyboardAvoidingView>
   );
 }
 
-const styles = {
-  label: {
-    fontSize: 16,
-    marginBottom: 5,
-    fontWeight: "500",
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: "#bbb",
-    padding: 12,
-    borderRadius: 10,
-    marginBottom: 15,
-  },
+const s = StyleSheet.create({
+  container: { padding: Spacing.xxl },
+  heading: { fontSize: FontSize.title, fontWeight: "bold", marginBottom: 20, color: Colors.text },
   preview: {
-    fontSize: 18,
+    fontSize: FontSize.xxl,
     marginTop: -5,
     marginBottom: 15,
     fontWeight: "bold",
-    color: "#0066FF",
+    color: Colors.primaryDark,
   },
-  button: {
-    backgroundColor: "#0066FF",
+  payRow: { flexDirection: "row", marginVertical: 10 },
+  payOption: { padding: 10, borderRadius: Radius.md, marginRight: 10 },
+  payOptionText: { fontWeight: "bold", textTransform: "capitalize" },
+  noteInput: { minHeight: 80, textAlignVertical: "top" },
+  saveBtn: {
+    backgroundColor: Colors.primaryDark,
     padding: 15,
-    borderRadius: 10,
+    borderRadius: Radius.md,
     alignItems: "center",
     marginTop: 40,
     flexDirection: "row",
     justifyContent: "center",
     elevation: 3,
   },
-  buttonText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "bold",
-  },
-};
+  saveBtnText: { color: Colors.surface, fontSize: FontSize.lg, fontWeight: "bold" },
+});

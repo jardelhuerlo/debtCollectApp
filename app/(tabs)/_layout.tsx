@@ -1,59 +1,40 @@
-import { Tabs } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import { Tabs } from "expo-router";
+import React, { useEffect, useState } from "react";
 
-import { HapticTab } from '@/components/haptic-tab';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import { Colors } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
-import { supabase } from '@/lib/supabase';
+import { HapticTab } from "@/components/haptic-tab";
+import { IconSymbol } from "@/components/ui/icon-symbol";
+import { Colors } from "@/constants/theme";
+import { useColorScheme } from "@/hooks/use-color-scheme";
+import { getCurrentSession } from "@/services/auth.service";
+import { checkSubscription } from "@/services/profile.service";
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
   const [initialRoute, setInitialRoute] = useState<string | null>(null);
-  const activeColor = "#4f9cff";   // 🔵 celeste activo
-  const inactiveColor = "#9ca3af"; // gris inactivo
+  const activeColor = "#4f9cff";
+  const inactiveColor = "#9ca3af";
+
   useEffect(() => {
     const loadInitialRoute = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
+      const session = await getCurrentSession();
 
       if (!session) {
-        setInitialRoute('userScreen');
+        setInitialRoute("userScreen");
         return;
       }
 
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('is_active, subscription_expires')
-        .eq('id', session.user.id)
-        .single();
+      const { isActive } = await checkSubscription(session.user.id);
 
-      if (!profile) {
-        setInitialRoute('userScreen');
-        return;
-      }
-
-      const now = new Date();
-      const expiresAt = profile.subscription_expires
-        ? new Date(profile.subscription_expires)
-        : null;
-
-      const isExpired =
-        !profile.is_active ||
-        (expiresAt ? expiresAt <= now : true);
-
-      if (isExpired) {
-        // 🔴 Si está vencida → manda al perfil
-        setInitialRoute('userScreen');
+      if (!isActive) {
+        setInitialRoute("userScreen");
       } else {
-        // 🟢 Si está activa → manda a préstamos
-        setInitialRoute('loans-historyScreen');
+        setInitialRoute("loans-historyScreen");
       }
     };
 
     loadInitialRoute();
   }, []);
 
-  // MIENTRAS CARGA, NO RENDERIZAR NAV
   if (!initialRoute) return null;
 
   return (
@@ -78,30 +59,24 @@ export default function TabLayout() {
       <Tabs.Screen
         name="loans-historyScreen"
         options={{
-          title: 'Préstamo',
-          tabBarIcon: ({ color }) => (
-            <IconSymbol size={28} name="banknote.fill" color={color} />
-          ),
+          title: "Préstamo",
+          tabBarIcon: ({ color }) => <IconSymbol size={28} name="banknote.fill" color={color} />,
         }}
       />
 
       <Tabs.Screen
         name="loansScreen"
         options={{
-          title: 'Registro',
-          tabBarIcon: ({ color }) => (
-            <IconSymbol size={28} name="plus.circle.fill" color={color} />
-          ),
+          title: "Registro",
+          tabBarIcon: ({ color }) => <IconSymbol size={28} name="plus.circle.fill" color={color} />,
         }}
       />
 
       <Tabs.Screen
         name="userScreen"
         options={{
-          title: 'Usuario',
-          tabBarIcon: ({ color }) => (
-            <IconSymbol size={28} name="person.fill" color={color} />
-          ),
+          title: "Usuario",
+          tabBarIcon: ({ color }) => <IconSymbol size={28} name="person.fill" color={color} />,
         }}
       />
     </Tabs>
