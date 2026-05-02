@@ -1,203 +1,185 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Image,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
+  ScrollView,
   Text,
   TextInput,
   TouchableOpacity,
   View,
+  StyleSheet,
 } from "react-native";
-import { supabase } from "../lib/supabase";
+import { useForm, Controller } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { useAuth } from "../hooks/useAuth";
+import { loginSchema } from "../lib/validation";
+import { showError } from "../lib/toast";
+import { logger } from "../lib/logger";
+import { Colors, Styles, FontSize } from "../constants/styles";
+
+type LoginForm = z.infer<typeof loginSchema>;
 
 export default function LoginScreen() {
   const router = useRouter();
+  const { signIn, isSigningIn, session } = useAuth();
+  const passwordRef = useRef<TextInput>(null);
+  const [showPassword, setShowPassword] = useState(false);
 
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false); // 👁️
-  const [loading, setLoading] = useState(false);
+  const {
+    control,
+    handleSubmit,
+    formState: { errors },
+    setError,
+    clearErrors,
+  } = useForm<LoginForm>({
+    resolver: zodResolver(loginSchema),
+    defaultValues: { email: "", password: "" },
+    mode: "onSubmit",
+  });
 
-  const handleLogin = async () => {
-    if (!email || !password) {
-      Alert.alert("Error", "Debes ingresar tu email y contraseña.");
-      return;
+  useEffect(() => {
+    if (session) {
+      router.replace("/(tabs)/loans-historyScreen");
     }
+  }, [session, router]);
 
-    setLoading(true);
-
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-
-    setLoading(false);
+  const onSubmit = async (data: LoginForm) => {
+    Keyboard.dismiss();
+    const { error } = await signIn(data.email, data.password);
 
     if (error) {
-      Alert.alert("Error al iniciar sesión", "Correo o contraseña incorrecta");
-      return;
-    }
-
-    if (data.session?.user) {
-      router.replace("/(tabs)/loans-historyScreen");
+      logger.error("Login failed", error);
+      if (
+        error.message.toLowerCase().includes("invalid") ||
+        error.message.toLowerCase().includes("credentials")
+      ) {
+        setError("password", { message: "Correo o contraseña incorrectos." });
+      } else {
+        showError("Error de conexión", "Verifica tu internet e intenta de nuevo.");
+      }
     }
   };
 
   return (
     <KeyboardAvoidingView
-      style={{ flex: 1 }}
+      style={Styles.screen}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
-      <View
-        style={{
-          flex: 1,
-          backgroundColor: "#f8fafc",
-          alignItems: "center",
-          justifyContent: "center",
-          paddingHorizontal: 30,
-        }}
-      >
-        {/* Avatar */}
-        <View
-          style={{
-            width: 90,
-            height: 90,
-            borderRadius: 45,
-            backgroundColor: "#2563eb20",
-            alignItems: "center",
-            justifyContent: "center",
-            marginBottom: 25,
-          }}
-        >
-          {/* <Text style={{ fontSize: 36, fontWeight: "bold", color: "#2563eb" }}>
-            PT
-          </Text> */}
-          <Image
-            source={require("../assets/images/icon.png")}
-            style={{ width: 90, height: 90, borderRadius: 25 }}
-          />
-        </View>
+      <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
+        <View style={Styles.formWrap}>
+          <View style={s.logoWrap}>
+            <Image source={require("../assets/images/icon.png")} style={s.logo} />
+          </View>
 
-        <Text
-          style={{
-            fontSize: 26,
-            fontWeight: "bold",
-            marginBottom: 6,
-            color: "#1e293b",
-          }}
-        >
-          Bienvenido
-        </Text>
+          <Text style={Styles.title}>Bienvenido</Text>
+          <Text style={Styles.subtitle}>Ingresa con tu correo y contraseña para continuar</Text>
 
-        <Text
-          style={{
-            fontSize: 14,
-            color: "#64748b",
-            marginBottom: 25,
-            textAlign: "center",
-          }}
-        >
-          Ingresa con tu correo y contraseña para continuar
-        </Text>
+          <View style={Styles.inputWrap}>
+            <Controller
+              control={control}
+              name="email"
+              render={({ field: { onChange, value } }) => (
+                <TextInput
+                  placeholder="Correo electrónico"
+                  placeholderTextColor={Colors.placeholder}
+                  autoCapitalize="none"
+                  keyboardType="email-address"
+                  returnKeyType="next"
+                  value={value}
+                  onChangeText={(text) => {
+                    onChange(text);
+                    if (errors.email) clearErrors("email");
+                  }}
+                  onSubmitEditing={() => passwordRef.current?.focus()}
+                  style={[Styles.input, errors.email && Styles.inputDanger]}
+                />
+              )}
+            />
+            {errors.email && <Text style={Styles.error}>{errors.email.message}</Text>}
+          </View>
 
-        {/* EMAIL */}
-        <TextInput
-          placeholder="Correo electrónico"
-          placeholderTextColor="#94a3b8"
-          autoCapitalize="none"
-          keyboardType="email-address"
-          value={email}
-          onChangeText={setEmail}
-          style={{
-            width: "100%",
-            backgroundColor: "white",
-            borderRadius: 12,
-            padding: 14,
-            borderWidth: 1,
-            borderColor: "#e2e8f0",
-            marginBottom: 14,
-            fontSize: 16,
-          }}
-        />
-
-        {/* PASSWORD + 👁️ */}
-        <View
-          style={{
-            width: "100%",
-            backgroundColor: "white",
-            borderRadius: 12,
-            borderWidth: 1,
-            borderColor: "#e2e8f0",
-            marginBottom: 20,
-            flexDirection: "row",
-            alignItems: "center",
-          }}
-        >
-          <TextInput
-            placeholder="Contraseña"
-            placeholderTextColor="#94a3b8"
-            secureTextEntry={!showPassword} // 🔑 asteriscos
-            value={password}
-            onChangeText={setPassword}
-            style={{
-              flex: 1,
-              padding: 14,
-              fontSize: 16,
-              color: "#1e293b",
-            }}
-          />
+          <View style={Styles.inputWrap}>
+            <View style={[Styles.inputRow, errors.password && Styles.inputRowDanger]}>
+              <Controller
+                control={control}
+                name="password"
+                render={({ field: { onChange, value } }) => (
+                  <TextInput
+                    ref={passwordRef}
+                    placeholder="Contraseña"
+                    placeholderTextColor={Colors.placeholder}
+                    secureTextEntry={!showPassword}
+                    returnKeyType="done"
+                    value={value}
+                    onChangeText={(text) => {
+                      onChange(text);
+                      if (errors.password) clearErrors("password");
+                    }}
+                    onSubmitEditing={handleSubmit(onSubmit)}
+                    style={Styles.inputFlex}
+                  />
+                )}
+              />
+              <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={s.eyeBtn}>
+                <Ionicons
+                  name={showPassword ? "eye-off" : "eye"}
+                  size={22}
+                  color={Colors.textSecondary}
+                />
+              </TouchableOpacity>
+            </View>
+            {errors.password && <Text style={Styles.error}>{errors.password.message}</Text>}
+          </View>
 
           <TouchableOpacity
-            onPress={() => setShowPassword(!showPassword)}
-            style={{ paddingHorizontal: 14 }}
+            onPress={() => router.push("/forgotPasswordScreen")}
+            style={s.forgotBtn}
           >
-            <Ionicons
-              name={showPassword ? "eye-off" : "eye"}
-              size={22}
-              color="#64748b"
-            />
+            <Text style={s.forgotText}>¿Olvidaste tu contraseña?</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={handleSubmit(onSubmit)}
+            disabled={isSigningIn}
+            style={[Styles.btnPrimary, isSigningIn && Styles.btnPrimaryDisabled]}
+          >
+            {isSigningIn ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={Styles.btnPrimaryText}>Iniciar sesión</Text>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity onPress={() => router.push("/signUpScreen")}>
+            <Text style={Styles.link}>
+              ¿No tienes cuenta? <Text style={Styles.linkBold}>Regístrate</Text>
+            </Text>
           </TouchableOpacity>
         </View>
-
-        {/* BOTÓN LOGIN */}
-        <TouchableOpacity
-          onPress={handleLogin}
-          disabled={loading}
-          style={{
-            width: "100%",
-            backgroundColor: "#2563eb",
-            padding: 16,
-            borderRadius: 12,
-            alignItems: "center",
-            shadowColor: "#2563eb",
-            shadowOpacity: 0.25,
-            shadowOffset: { width: 0, height: 3 },
-            shadowRadius: 6,
-            elevation: 4,
-          }}
-        >
-          {loading ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={{ color: "white", fontSize: 17, fontWeight: "600" }}>
-              Iniciar sesión
-            </Text>
-          )}
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          onPress={() => router.push("/signUpScreen")}
-          style={{ marginTop: 20 }}
-        >
-          <Text style={{ color: "#2563eb", fontSize: 16 }}>
-            ¿No tienes cuenta? Regístrate
-          </Text>
-        </TouchableOpacity>
-      </View>
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 }
+
+const s = StyleSheet.create({
+  scroll: { flexGrow: 1 },
+  logoWrap: {
+    width: 90,
+    height: 90,
+    borderRadius: 25,
+    backgroundColor: Colors.primaryBg,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 25,
+  },
+  logo: { width: 90, height: 90, borderRadius: 25 },
+  eyeBtn: { paddingHorizontal: 14 },
+  forgotBtn: { alignSelf: "flex-end", marginBottom: 24 },
+  forgotText: { color: Colors.link, fontSize: FontSize.sm },
+});

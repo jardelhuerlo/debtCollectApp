@@ -2,6 +2,7 @@ import { supabase } from "@/lib/supabase";
 import { useRouter } from "expo-router";
 import { useEffect } from "react";
 import { ActivityIndicator, View } from "react-native";
+import { Styles } from "../constants/styles";
 
 export default function Index() {
   const router = useRouter();
@@ -21,7 +22,7 @@ export default function Index() {
   }, []);
 
   return (
-    <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+    <View style={Styles.center}>
       <ActivityIndicator size="large" />
     </View>
   );
