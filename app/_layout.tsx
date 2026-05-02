@@ -1,30 +1,49 @@
-import { supabase } from "@/lib/supabase";
-import { Session } from "@supabase/supabase-js";
 import { Stack } from "expo-router";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, View } from "react-native";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
+import * as Linking from "expo-linking";
+import { QueryClientProvider } from "@tanstack/react-query";
+import { queryClient } from "@/lib/queryClient";
+import { AppProvider } from "@/components/AppProvider";
+import { getCurrentSession, onAuthStateChange } from "@/services/auth.service";
+import { validateDeepLink } from "@/lib/deepLink";
+import { logger } from "@/lib/logger";
+import type { Session } from "@supabase/supabase-js";
 
 export default function RootLayout() {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Obtener sesión persistida
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
+    getCurrentSession().then((s) => {
+      setSession(s);
       setLoading(false);
     });
 
-    // Escuchar cambios de auth
-    const { data: listener } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
-        setSession(session);
-      }
-    );
+    const { unsubscribe } = onAuthStateChange((s) => {
+      setSession(s);
+    });
 
-    return () => {
-      listener.subscription.unsubscribe();
+    return unsubscribe;
+  }, []);
+
+  useEffect(() => {
+    const handleDeepLink = ({ url }: { url: string }) => {
+      const result = validateDeepLink(url);
+      if (!result.valid) {
+        logger.warn("Invalid deep link blocked", { url });
+        return;
+      }
+      logger.info("Deep link handled", { type: result.type });
     };
+
+    Linking.getInitialURL().then((url) => {
+      if (url) handleDeepLink({ url });
+    });
+
+    const subscription = Linking.addEventListener("url", handleDeepLink);
+    return () => subscription.remove();
   }, []);
 
   if (loading) {
@@ -36,8 +55,18 @@ export default function RootLayout() {
   }
 
   return (
-    <Stack screenOptions={{ headerShown: false }}>
-      {/* No lógica de navegación aquí */}
-    </Stack>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <QueryClientProvider client={queryClient}>
+        <AppProvider>
+          <Stack
+            screenOptions={{
+              headerShown: false,
+              animation: "slide_from_right",
+              animationDuration: 250,
+            }}
+          />
+        </AppProvider>
+      </QueryClientProvider>
+    </GestureHandlerRootView>
   );
 }
