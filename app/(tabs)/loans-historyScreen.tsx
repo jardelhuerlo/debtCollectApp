@@ -1,5 +1,6 @@
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import * as Print from "expo-print";
+import { File, Paths } from "expo-file-system";
 import * as Haptics from "expo-haptics";
 import { useEffect, useState, useCallback } from "react";
 import {
@@ -164,8 +165,11 @@ export default function LoansHistoryScreen() {
       const clientSlug = historyLoan.debtor_name.replace(/\s+/g, "_");
       const dateSlug = new Date().toLocaleDateString("es-ES").replace(/\//g, "-");
       const fileName = `Reporte_${clientSlug}_${dateSlug}`;
-      const { uri } = await Print.printToFileAsync({ html: htmlContent, fileName });
-      await Print.printAsync({ uri });
+      const { uri } = await Print.printToFileAsync({ html: htmlContent });
+      const namedFile = new File(Paths.cache, `${fileName}.pdf`);
+      if (namedFile.exists) namedFile.delete();
+      new File(uri).move(namedFile);
+      await Print.printAsync({ uri: namedFile.uri });
     } catch (error) {
       logger.error("PDF generation failed", error);
       showError("Error", "No se pudo generar el PDF");

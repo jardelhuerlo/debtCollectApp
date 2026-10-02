@@ -9,7 +9,13 @@ import { AppProvider } from "@/components/AppProvider";
 import { getCurrentSession, onAuthStateChange } from "@/services/auth.service";
 import { validateDeepLink } from "@/lib/deepLink";
 import { logger } from "@/lib/logger";
+import { usePushNotifications } from "@/hooks/usePushNotifications";
 import type { Session } from "@supabase/supabase-js";
+
+function PushRegistration() {
+  usePushNotifications();
+  return null;
+}
 
 export default function RootLayout() {
   const [session, setSession] = useState<Session | null>(null);
@@ -61,6 +67,7 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <QueryClientProvider client={queryClient}>
         <AppProvider>
+          {session && <PushRegistration />}
           <Stack
             screenOptions={{
               headerShown: false,
