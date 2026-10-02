@@ -161,7 +161,11 @@ export default function LoansHistoryScreen() {
     `;
 
     try {
-      await Print.printAsync({ html: htmlContent });
+      const clientSlug = historyLoan.debtor_name.replace(/\s+/g, "_");
+      const dateSlug = new Date().toLocaleDateString("es-ES").replace(/\//g, "-");
+      const fileName = `Reporte_${clientSlug}_${dateSlug}`;
+      const { uri } = await Print.printToFileAsync({ html: htmlContent, fileName });
+      await Print.printAsync({ uri });
     } catch (error) {
       logger.error("PDF generation failed", error);
       showError("Error", "No se pudo generar el PDF");
