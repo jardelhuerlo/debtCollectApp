@@ -36,6 +36,7 @@ export function useCreateLoanMutation() {
       interes: number;
       paymentMethod: PaymentMethod;
       note?: string;
+      renewedFrom?: string;
     }) => {
       const user = await getCurrentUser();
       if (!user) throw new Error("No user");

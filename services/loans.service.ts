@@ -20,8 +20,10 @@ export async function createLoan(params: {
   interes: number;
   paymentMethod: PaymentMethod;
   note?: string;
+  renewedFrom?: string;
 }): Promise<SupabaseMutationResult> {
   const { error } = await supabase.rpc("create_loan_with_interest", {
+    p_renewed_from: params.renewedFrom ?? null,
     p_owner_id: params.ownerId,
     p_debtor_name: sanitizeString(params.debtorName),
     p_amount: sanitizeNumber(params.amount),

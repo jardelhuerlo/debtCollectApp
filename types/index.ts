@@ -12,6 +12,8 @@ export interface Loan {
   note: string | null;
   interes: number;
   last_payment_was_zero: boolean;
+  renewed_from: string | null;
+  renewal_number: number;
   created_at: string;
 }
 

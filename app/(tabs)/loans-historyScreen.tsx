@@ -29,6 +29,7 @@ import { showSuccess, showError } from "@/lib/toast";
 import { logger } from "@/lib/logger";
 import { Colors, Styles, FontSize, Radius, Shadow, Spacing } from "@/constants/styles";
 import { CardSkeleton } from "@/components/SkeletonLoader";
+import { KeyboardSafeModalBody } from "@/components/KeyboardSafeModalBody";
 
 export { Loan, Payment } from "@/types";
 
@@ -38,9 +39,17 @@ export default function LoansHistoryScreen() {
   const loansQuery = useLoansQuery();
   const allLoans = loansQuery.data ?? [];
   const [search, setSearch] = useState("");
+  const [tab, setTab] = useState<"activos" | "pagados">("activos");
   const normalize = (text: string) => text.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
   const query = normalize(search.trim());
-  const loans = query ? allLoans.filter((l) => normalize(l.debtor_name).includes(query)) : allLoans;
+  const matchingLoans = query
+    ? allLoans.filter((l) => normalize(l.debtor_name).includes(query))
+    : allLoans;
+  const activeLoans = matchingLoans.filter((l) => l.remaining > 0);
+  const paidLoans = matchingLoans.filter((l) => l.remaining <= 0);
+  const loans = tab === "activos" ? activeLoans : paidLoans;
+  const otherTabCount = tab === "activos" ? paidLoans.length : activeLoans.length;
+  const renewedIds = new Set(allLoans.map((l) => l.renewed_from).filter(Boolean));
   const isLoading = loansQuery.isLoading;
   const isRefetching = loansQuery.isRefetching;
   const refetch = loansQuery.refetch;
@@ -67,6 +76,7 @@ export default function LoansHistoryScreen() {
   const [renewModalVisible, setRenewModalVisible] = useState(false);
   const [loanToRenew, setLoanToRenew] = useState<Loan | null>(null);
   const [renewAmount, setRenewAmount] = useState("");
+  const [renewInteres, setRenewInteres] = useState("");
   const [renewNote, setRenewNote] = useState("");
 
   const createLoanMutation = useCreateLoanMutation();
@@ -236,24 +246,34 @@ export default function LoansHistoryScreen() {
       showError("Error", "Ingresa un monto válido.");
       return;
     }
+    const interes = Number(renewInteres);
+    if (renewInteres.trim() === "" || isNaN(interes) || interes < 0 || interes > 100) {
+      showError("Error", "El interés debe ser un número entre 0 y 100.");
+      return;
+    }
     createLoanMutation.mutate(
       {
         debtorName: loanToRenew.debtor_name,
         amount,
-        interes: loanToRenew.interes,
+        interes,
         paymentMethod: loanToRenew.payment_method ?? "efectivo",
         note: renewNote || "",
+        renewedFrom: loanToRenew.id,
       },
       {
         onSuccess: () => {
           showSuccess("Éxito", `Crédito renovado para ${loanToRenew.debtor_name}.`);
+          setTab("activos");
           setRenewModalVisible(false);
           setLoanToRenew(null);
           setRenewAmount("");
+          setRenewInteres("");
           setRenewNote("");
         },
-        onError: () => {
-          showError("Error", "No se pudo renovar el crédito.");
+        onError: (err) => {
+          const message = (err as { message?: string } | null)?.message ?? "";
+          const known = /ya fue renovado|aún no está pagado|no existe/.test(message);
+          showError("Error", known ? message : "No se pudo renovar el crédito.");
         },
       }
     );
@@ -303,6 +323,10 @@ export default function LoansHistoryScreen() {
         <Text style={{ color: Colors.text, fontWeight: "500" }}>{item.status}</Text>
       </View>
 
+      {item.renewal_number > 0 && (
+        <Text style={s.renewalTag}>🔄 Renovación #{item.renewal_number}</Text>
+      )}
+
       {item.note && (
         <Text style={[s.loanNote, item.last_payment_was_zero && s.textOnAlert]}>
           📝 {item.note}
@@ -323,6 +347,10 @@ export default function LoansHistoryScreen() {
           >
             <Text>Registrar Pago</Text>
           </TouchableOpacity>
+        ) : renewedIds.has(item.id) ? (
+          <View style={s.renewedLabel}>
+            <Text style={s.renewedLabelText}>✅ Renovado</Text>
+          </View>
         ) : (
           <TouchableOpacity
             style={s.renewCreditBtn}
@@ -330,6 +358,7 @@ export default function LoansHistoryScreen() {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
               setLoanToRenew(item);
               setRenewAmount("");
+              setRenewInteres(String(item.interes));
               setRenewNote("");
               setRenewModalVisible(true);
             }}
@@ -370,6 +399,28 @@ export default function LoansHistoryScreen() {
         )}
       </View>
 
+      <View style={s.tabsRow}>
+        {(
+          [
+            { key: "activos", label: "Activos", count: activeLoans.length },
+            { key: "pagados", label: "Pagados", count: paidLoans.length },
+          ] as const
+        ).map((t) => (
+          <TouchableOpacity
+            key={t.key}
+            style={[s.tabBtn, tab === t.key && s.tabBtnActive]}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              setTab(t.key);
+            }}
+          >
+            <Text style={[s.tabText, tab === t.key && s.tabTextActive]}>
+              {t.label} ({t.count})
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
       {isLoading ? (
         <View>
           <CardSkeleton />
@@ -393,153 +444,155 @@ export default function LoansHistoryScreen() {
           ListEmptyComponent={
             <Text style={s.emptyText}>
               {query
-                ? "No se encontraron préstamos con ese nombre"
-                : "No hay préstamos registrados"}
+                ? otherTabCount > 0
+                  ? `Sin resultados aquí. Hay ${otherTabCount} en ${tab === "activos" ? "Pagados" : "Activos"}.`
+                  : "No se encontraron préstamos con ese nombre"
+                : tab === "activos"
+                  ? "No hay préstamos activos"
+                  : "No hay préstamos pagados"}
             </Text>
           }
         />
       )}
 
       <Modal visible={modalVisible} transparent animationType="fade">
-        <View style={Styles.modalOverlay}>
-          <View style={Styles.modalContent}>
-            {selectedLoan && (
-              <>
-                <Text style={Styles.modalTitle}>Detalles del Préstamo</Text>
+        <KeyboardSafeModalBody>
+          {selectedLoan && (
+            <>
+              <Text style={Styles.modalTitle}>Detalles del Préstamo</Text>
 
-                <Text>Cliente: {selectedLoan.debtor_name}</Text>
-                <Text>Monto Original: ${selectedLoan.original_amount}</Text>
-                <Text>Restante: ${selectedLoan.remaining}</Text>
-                <Text>Interés: {selectedLoan.interes}%</Text>
-                <Text>Estado: {selectedLoan.status}</Text>
-                {selectedLoan.note && <Text>Nota: {selectedLoan.note}</Text>}
+              <Text>Cliente: {selectedLoan.debtor_name}</Text>
+              <Text>Monto Original: ${selectedLoan.original_amount}</Text>
+              <Text>Restante: ${selectedLoan.remaining}</Text>
+              <Text>Interés: {selectedLoan.interes}%</Text>
+              <Text>Estado: {selectedLoan.status}</Text>
+              {selectedLoan.note && <Text>Nota: {selectedLoan.note}</Text>}
 
-                {selectedLoan.remaining <= 0 ? (
-                  <Text style={s.paidLabel}>Este préstamo ya está pagado</Text>
-                ) : (
-                  <>
-                    <Text style={s.sectionLabel}>Monto a pagar:</Text>
-                    <View style={s.inputBorder}>
-                      <TextInput
-                        value={paymentAmount}
-                        onChangeText={setPaymentAmount}
-                        placeholder="Ingresa el pago"
-                        placeholderTextColor={Colors.placeholder}
-                        keyboardType="numeric"
-                      />
-                    </View>
+              {selectedLoan.remaining <= 0 ? (
+                <Text style={s.paidLabel}>Este préstamo ya está pagado</Text>
+              ) : (
+                <>
+                  <Text style={s.sectionLabel}>Monto a pagar:</Text>
+                  <View style={s.inputBorder}>
+                    <TextInput
+                      value={paymentAmount}
+                      onChangeText={setPaymentAmount}
+                      placeholder="Ingresa el pago"
+                      placeholderTextColor={Colors.placeholder}
+                      keyboardType="numeric"
+                    />
+                  </View>
 
-                    <Text style={s.sectionLabel}>Método de pago:</Text>
-                    <View style={Styles.payToggle}>
-                      <TouchableOpacity
-                        style={[
-                          Styles.paymentOption,
-                          {
-                            backgroundColor:
-                              paymentMethod === "efectivo" ? Colors.paymentEfectivo : "#f0f0f0",
-                          },
-                        ]}
-                        onPress={() => {
-                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                          setPaymentMethod("efectivo");
+                  <Text style={s.sectionLabel}>Método de pago:</Text>
+                  <View style={Styles.payToggle}>
+                    <TouchableOpacity
+                      style={[
+                        Styles.paymentOption,
+                        {
+                          backgroundColor:
+                            paymentMethod === "efectivo" ? Colors.paymentEfectivo : "#f0f0f0",
+                        },
+                      ]}
+                      onPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                        setPaymentMethod("efectivo");
+                      }}
+                    >
+                      <Text
+                        style={{
+                          color: paymentMethod === "efectivo" ? "white" : "black",
+                          fontWeight: paymentMethod === "efectivo" ? "600" : "400",
                         }}
                       >
-                        <Text
-                          style={{
-                            color: paymentMethod === "efectivo" ? "white" : "black",
-                            fontWeight: paymentMethod === "efectivo" ? "600" : "400",
-                          }}
-                        >
-                          💵 Efectivo
-                        </Text>
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        style={[
-                          Styles.paymentOption,
-                          {
-                            backgroundColor:
-                              paymentMethod === "transferencia"
-                                ? Colors.paymentTransferencia
-                                : "#f0f0f0",
-                          },
-                        ]}
-                        onPress={() => {
-                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                          setPaymentMethod("transferencia");
-                        }}
-                      >
-                        <Text
-                          style={{
-                            color: paymentMethod === "transferencia" ? "white" : "black",
-                            fontWeight: paymentMethod === "transferencia" ? "600" : "400",
-                          }}
-                        >
-                          🏦 Transferencia
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-
-                    <Text style={s.sectionLabel}>Nota del pago (opcional):</Text>
-                    <View style={s.inputBorder}>
-                      <TextInput
-                        value={paymentNote}
-                        onChangeText={setPaymentNote}
-                        placeholder="Escribe una nota..."
-                        placeholderTextColor={Colors.placeholder}
-                        multiline
-                      />
-                    </View>
-
-                    <Text style={s.remainingLabel}>
-                      Restante después del pago:{" "}
-                      <Text style={{ fontWeight: "bold" }}>
-                        ${newRemaining !== null ? newRemaining : selectedLoan.remaining}
+                        💵 Efectivo
                       </Text>
-                    </Text>
+                    </TouchableOpacity>
 
                     <TouchableOpacity
                       style={[
-                        s.zeroPaymentBtn,
-                        (paymentAmount.trim().length > 0 || isProcessing) && { opacity: 0.4 },
+                        Styles.paymentOption,
+                        {
+                          backgroundColor:
+                            paymentMethod === "transferencia"
+                              ? Colors.paymentTransferencia
+                              : "#f0f0f0",
+                        },
                       ]}
-                      onPress={handleRegisterZeroPayment}
-                      disabled={paymentAmount.trim().length > 0 || isProcessing}
+                      onPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                        setPaymentMethod("transferencia");
+                      }}
                     >
-                      <IconSymbol name="exclamationmark.triangle.fill" size={18} color="white" />
-                      <Text style={s.btnWhiteText}>
-                        {isProcessing ? "Procesando..." : "Registrar día sin pago"}
+                      <Text
+                        style={{
+                          color: paymentMethod === "transferencia" ? "white" : "black",
+                          fontWeight: paymentMethod === "transferencia" ? "600" : "400",
+                        }}
+                      >
+                        🏦 Transferencia
                       </Text>
                     </TouchableOpacity>
+                  </View>
 
-                    <TouchableOpacity
-                      style={s.paymentBtn}
-                      onPress={handleRegisterPayment}
-                      disabled={isProcessing}
-                    >
-                      <Text style={s.btnWhiteText}>
-                        {isProcessing ? "Procesando..." : "Registrar Pago"}
-                      </Text>
-                    </TouchableOpacity>
-                  </>
-                )}
+                  <Text style={s.sectionLabel}>Nota del pago (opcional):</Text>
+                  <View style={s.inputBorder}>
+                    <TextInput
+                      value={paymentNote}
+                      onChangeText={setPaymentNote}
+                      placeholder="Escribe una nota..."
+                      placeholderTextColor={Colors.placeholder}
+                      multiline
+                    />
+                  </View>
 
-                <TouchableOpacity
-                  style={Styles.btnSecondary}
-                  onPress={() => {
-                    setModalVisible(false);
-                    setPaymentAmount("");
-                    setNewRemaining(null);
-                    setPaymentNote("");
-                    setPaymentMethod("efectivo");
-                  }}
-                >
-                  <Text style={Styles.btnSecondaryText}>Cerrar</Text>
-                </TouchableOpacity>
-              </>
-            )}
-          </View>
-        </View>
+                  <Text style={s.remainingLabel}>
+                    Restante después del pago:{" "}
+                    <Text style={{ fontWeight: "bold" }}>
+                      ${newRemaining !== null ? newRemaining : selectedLoan.remaining}
+                    </Text>
+                  </Text>
+
+                  <TouchableOpacity
+                    style={[
+                      s.zeroPaymentBtn,
+                      (paymentAmount.trim().length > 0 || isProcessing) && { opacity: 0.4 },
+                    ]}
+                    onPress={handleRegisterZeroPayment}
+                    disabled={paymentAmount.trim().length > 0 || isProcessing}
+                  >
+                    <IconSymbol name="exclamationmark.triangle.fill" size={18} color="white" />
+                    <Text style={s.btnWhiteText}>
+                      {isProcessing ? "Procesando..." : "Registrar día sin pago"}
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={s.paymentBtn}
+                    onPress={handleRegisterPayment}
+                    disabled={isProcessing}
+                  >
+                    <Text style={s.btnWhiteText}>
+                      {isProcessing ? "Procesando..." : "Registrar Pago"}
+                    </Text>
+                  </TouchableOpacity>
+                </>
+              )}
+
+              <TouchableOpacity
+                style={Styles.btnSecondary}
+                onPress={() => {
+                  setModalVisible(false);
+                  setPaymentAmount("");
+                  setNewRemaining(null);
+                  setPaymentNote("");
+                  setPaymentMethod("efectivo");
+                }}
+              >
+                <Text style={Styles.btnSecondaryText}>Cerrar</Text>
+              </TouchableOpacity>
+            </>
+          )}
+        </KeyboardSafeModalBody>
       </Modal>
 
       <Modal visible={paymentsModal} transparent animationType="fade">
@@ -661,70 +714,79 @@ export default function LoansHistoryScreen() {
       </Modal>
 
       <Modal visible={renewModalVisible} transparent animationType="fade">
-        <View style={Styles.modalOverlay}>
-          <View style={Styles.modalContent}>
-            {loanToRenew && (
-              <>
-                <Text style={Styles.modalTitle}>Renovar Crédito</Text>
+        <KeyboardSafeModalBody>
+          {loanToRenew && (
+            <>
+              <Text style={Styles.modalTitle}>Renovar Crédito</Text>
 
-                <View style={s.renewInfoBox}>
-                  <Text style={s.renewInfoText}>👤 {loanToRenew.debtor_name}</Text>
-                  <Text style={s.renewInfoText}>📈 Interés: {loanToRenew.interes}%</Text>
-                  <Text style={s.renewInfoText}>
-                    💳 Método:{" "}
-                    {loanToRenew.payment_method === "efectivo" ? "Efectivo" : "Transferencia"}
-                  </Text>
-                </View>
+              <View style={s.renewInfoBox}>
+                <Text style={s.renewInfoText}>👤 {loanToRenew.debtor_name}</Text>
+                <Text style={s.renewInfoText}>
+                  💳 Método:{" "}
+                  {loanToRenew.payment_method === "efectivo" ? "Efectivo" : "Transferencia"}
+                </Text>
+              </View>
 
-                <Text style={s.sectionLabel}>Nuevo monto:</Text>
-                <View style={s.inputBorder}>
-                  <TextInput
-                    value={renewAmount}
-                    onChangeText={setRenewAmount}
-                    placeholder="Ej: 200.00"
-                    placeholderTextColor={Colors.placeholder}
-                    keyboardType="numeric"
-                  />
-                </View>
+              <Text style={s.sectionLabel}>Nuevo monto:</Text>
+              <View style={s.inputBorder}>
+                <TextInput
+                  value={renewAmount}
+                  onChangeText={setRenewAmount}
+                  placeholder="Ej: 200.00"
+                  placeholderTextColor={Colors.placeholder}
+                  keyboardType="numeric"
+                />
+              </View>
 
-                <Text style={s.sectionLabel}>Nota (opcional):</Text>
-                <View style={s.inputBorder}>
-                  <TextInput
-                    value={renewNote}
-                    onChangeText={setRenewNote}
-                    placeholder="Escribe una nota..."
-                    placeholderTextColor={Colors.placeholder}
-                    multiline
-                  />
-                </View>
+              <Text style={s.sectionLabel}>Interés (%):</Text>
+              <View style={s.inputBorder}>
+                <TextInput
+                  value={renewInteres}
+                  onChangeText={setRenewInteres}
+                  placeholder="Ej: 10"
+                  placeholderTextColor={Colors.placeholder}
+                  keyboardType="numeric"
+                />
+              </View>
 
-                <TouchableOpacity
-                  style={[s.paymentBtn, createLoanMutation.isPending && { opacity: 0.6 }]}
-                  onPress={handleRenewLoan}
-                  disabled={createLoanMutation.isPending}
-                >
-                  {createLoanMutation.isPending ? (
-                    <ActivityIndicator color="#fff" />
-                  ) : (
-                    <Text style={s.btnWhiteText}>Registrar nuevo crédito</Text>
-                  )}
-                </TouchableOpacity>
+              <Text style={s.sectionLabel}>Nota (opcional):</Text>
+              <View style={s.inputBorder}>
+                <TextInput
+                  value={renewNote}
+                  onChangeText={setRenewNote}
+                  placeholder="Escribe una nota..."
+                  placeholderTextColor={Colors.placeholder}
+                  multiline
+                />
+              </View>
 
-                <TouchableOpacity
-                  style={Styles.btnSecondary}
-                  onPress={() => {
-                    setRenewModalVisible(false);
-                    setLoanToRenew(null);
-                    setRenewAmount("");
-                    setRenewNote("");
-                  }}
-                >
-                  <Text style={Styles.btnSecondaryText}>Cancelar</Text>
-                </TouchableOpacity>
-              </>
-            )}
-          </View>
-        </View>
+              <TouchableOpacity
+                style={[s.paymentBtn, createLoanMutation.isPending && { opacity: 0.6 }]}
+                onPress={handleRenewLoan}
+                disabled={createLoanMutation.isPending}
+              >
+                {createLoanMutation.isPending ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={s.btnWhiteText}>Registrar nuevo crédito</Text>
+                )}
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={Styles.btnSecondary}
+                onPress={() => {
+                  setRenewModalVisible(false);
+                  setLoanToRenew(null);
+                  setRenewAmount("");
+                  setRenewInteres("");
+                  setRenewNote("");
+                }}
+              >
+                <Text style={Styles.btnSecondaryText}>Cancelar</Text>
+              </TouchableOpacity>
+            </>
+          )}
+        </KeyboardSafeModalBody>
       </Modal>
 
       <Modal visible={deleteModalVisible} transparent animationType="fade">
@@ -866,6 +928,39 @@ const s = StyleSheet.create({
     borderColor: "#991b1b",
   },
   textOnAlert: { color: "#ffffff" },
+  tabsRow: { flexDirection: "row", gap: 8, marginBottom: 10 },
+  tabBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: Radius.md,
+    alignItems: "center",
+    backgroundColor: "#e5e7eb",
+  },
+  tabBtnActive: { backgroundColor: Colors.primary },
+  tabText: { fontWeight: "600", color: Colors.textSecondary },
+  tabTextActive: { color: "#ffffff" },
+  renewalTag: {
+    marginTop: 8,
+    alignSelf: "flex-start",
+    color: "#1d4ed8",
+    backgroundColor: "#dbeafe",
+    fontWeight: "700",
+    fontSize: FontSize.sm,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: Radius.sm,
+    overflow: "hidden",
+  },
+  renewedLabel: {
+    flex: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: Radius.md,
+    alignItems: "center",
+    backgroundColor: "#f3f4f6",
+    marginRight: 8,
+  },
+  renewedLabelText: { color: "#6b7280", fontWeight: "700", fontSize: FontSize.sm },
   alertLabel: {
     marginTop: 6,
     alignSelf: "flex-start",
