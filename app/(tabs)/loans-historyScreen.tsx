@@ -2,7 +2,7 @@ import { IconSymbol } from "@/components/ui/icon-symbol";
 import * as Print from "expo-print";
 import { shareAsync } from "expo-sharing";
 import * as Haptics from "expo-haptics";
-import { useEffect, useState, useCallback, useMemo, useRef } from "react";
+import { useEffect, useState, useCallback } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -16,10 +16,10 @@ import {
   StyleSheet,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import BottomSheet, { BottomSheetBackdrop } from "@gorhom/bottom-sheet";
 import {
   useLoansQuery,
   useDeleteLoanMutation,
+  useCreateLoanMutation,
   usePaymentsQuery,
   useRegisterPaymentMutation,
   useRegisterZeroPaymentMutation,
@@ -57,9 +57,15 @@ export default function LoansHistoryScreen() {
   const [paymentNote, setPaymentNote] = useState<string>("");
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("efectivo");
 
-  const [deleteSheetOpen, setDeleteSheetOpen] = useState(false);
+  const [deleteModalVisible, setDeleteModalVisible] = useState(false);
   const [loanToDelete, setLoanToDelete] = useState<string | null>(null);
-  const deleteSheetRef = useRef<BottomSheet>(null);
+
+  const [renewModalVisible, setRenewModalVisible] = useState(false);
+  const [loanToRenew, setLoanToRenew] = useState<Loan | null>(null);
+  const [renewAmount, setRenewAmount] = useState("");
+  const [renewNote, setRenewNote] = useState("");
+
+  const createLoanMutation = useCreateLoanMutation();
 
   const registerPaymentMutation = useRegisterPaymentMutation(() => {
     setModalVisible(false);
@@ -166,8 +172,7 @@ export default function LoansHistoryScreen() {
 
   const handleDeleteLoan = useCallback((id: string) => {
     setLoanToDelete(id);
-    setDeleteSheetOpen(true);
-    deleteSheetRef.current?.snapToIndex(0);
+    setDeleteModalVisible(true);
   }, []);
 
   const confirmDelete = useCallback(() => {
@@ -179,7 +184,8 @@ export default function LoansHistoryScreen() {
         },
       });
     }
-    deleteSheetRef.current?.close();
+    setDeleteModalVisible(false);
+    setLoanToDelete(null);
   }, [loanToDelete, deleteLoanMutation]);
 
   const openPaymentsModal = (loanId: string) => {
@@ -213,9 +219,39 @@ export default function LoansHistoryScreen() {
     registerZeroPaymentMutation.mutate(selectedLoan.id);
   };
 
+  const handleRenewLoan = () => {
+    if (!loanToRenew) return;
+    const amount = parseFloat(renewAmount);
+    if (isNaN(amount) || amount <= 0) {
+      showError("Error", "Ingresa un monto válido.");
+      return;
+    }
+    createLoanMutation.mutate(
+      {
+        debtorName: loanToRenew.debtor_name,
+        amount,
+        interes: loanToRenew.interes,
+        paymentMethod: loanToRenew.payment_method ?? "efectivo",
+        note: renewNote || "",
+      },
+      {
+        onSuccess: () => {
+          showSuccess("Éxito", `Crédito renovado para ${loanToRenew.debtor_name}.`);
+          setRenewModalVisible(false);
+          setLoanToRenew(null);
+          setRenewAmount("");
+          setRenewNote("");
+        },
+        onError: () => {
+          showError("Error", "No se pudo renovar el crédito.");
+        },
+      }
+    );
+  };
+
   const renderLoan = ({ item }: { item: Loan }) => (
     <TouchableOpacity
-      style={Styles.card}
+      style={[Styles.card, item.last_payment_was_zero && s.cardAlert]}
       activeOpacity={0.7}
       onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
     >
@@ -254,36 +290,39 @@ export default function LoansHistoryScreen() {
       {item.note && <Text style={s.loanNote}>📝 {item.note}</Text>}
 
       <View style={s.loanActions}>
-        <TouchableOpacity
-          style={Styles.loanCardBtn}
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-            setSelectedLoan(item);
-            setModalVisible(true);
-            setPaymentAmount("");
-            setNewRemaining(item.remaining);
-          }}
-        >
-          <Text>Registrar Pago</Text>
-        </TouchableOpacity>
+        {item.remaining > 0 ? (
+          <TouchableOpacity
+            style={Styles.loanCardBtn}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              setSelectedLoan(item);
+              setModalVisible(true);
+              setPaymentAmount("");
+              setNewRemaining(item.remaining);
+            }}
+          >
+            <Text>Registrar Pago</Text>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity
+            style={s.renewCreditBtn}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              setLoanToRenew(item);
+              setRenewAmount("");
+              setRenewNote("");
+              setRenewModalVisible(true);
+            }}
+          >
+            <Text style={s.renewCreditText}>🔄 Renovar crédito</Text>
+          </TouchableOpacity>
+        )}
 
         <TouchableOpacity style={Styles.loanCardBtnBlue} onPress={() => openPaymentsModal(item.id)}>
           <Text style={{ fontWeight: "600" }}>Ver Pagos</Text>
         </TouchableOpacity>
       </View>
     </TouchableOpacity>
-  );
-
-  const renderBackdrop = useCallback(
-    (props: any) => (
-      <BottomSheetBackdrop
-        {...props}
-        disappearsOnIndex={-1}
-        appearsOnIndex={0}
-        pressBehavior="close"
-      />
-    ),
-    []
   );
 
   return (
@@ -412,9 +451,12 @@ export default function LoansHistoryScreen() {
                     </Text>
 
                     <TouchableOpacity
-                      style={s.zeroPaymentBtn}
+                      style={[
+                        s.zeroPaymentBtn,
+                        (paymentAmount.trim().length > 0 || isProcessing) && { opacity: 0.4 },
+                      ]}
                       onPress={handleRegisterZeroPayment}
-                      disabled={isProcessing}
+                      disabled={paymentAmount.trim().length > 0 || isProcessing}
                     >
                       <IconSymbol name="exclamationmark.triangle.fill" size={18} color="white" />
                       <Text style={s.btnWhiteText}>
@@ -570,33 +612,98 @@ export default function LoansHistoryScreen() {
         </View>
       </Modal>
 
-      <BottomSheet
-        ref={deleteSheetRef}
-        index={-1}
-        snapPoints={["25%"]}
-        enablePanDownToClose
-        backdropComponent={renderBackdrop}
-        backgroundStyle={{ backgroundColor: Colors.surface }}
-      >
-        <View style={s.sheetContent}>
-          <IconSymbol name="exclamationmark.triangle.fill" size={32} color={Colors.delete} />
-          <Text style={s.sheetTitle}>Eliminar Préstamo</Text>
-          <Text style={s.sheetMessage}>
-            ¿Estás seguro de que deseas eliminar este préstamo? Esta acción no se puede deshacer.
-          </Text>
-          <View style={s.sheetBtnRow}>
-            <TouchableOpacity
-              style={[s.sheetBtn, s.sheetBtnCancel]}
-              onPress={() => deleteSheetRef.current?.close()}
-            >
-              <Text style={s.sheetBtnCancelText}>Cancelar</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[s.sheetBtn, s.sheetBtnDanger]} onPress={confirmDelete}>
-              <Text style={s.sheetBtnText}>Eliminar</Text>
-            </TouchableOpacity>
+      <Modal visible={renewModalVisible} transparent animationType="fade">
+        <View style={Styles.modalOverlay}>
+          <View style={Styles.modalContent}>
+            {loanToRenew && (
+              <>
+                <Text style={Styles.modalTitle}>Renovar Crédito</Text>
+
+                <View style={s.renewInfoBox}>
+                  <Text style={s.renewInfoText}>👤 {loanToRenew.debtor_name}</Text>
+                  <Text style={s.renewInfoText}>📈 Interés: {loanToRenew.interes}%</Text>
+                  <Text style={s.renewInfoText}>
+                    💳 Método:{" "}
+                    {loanToRenew.payment_method === "efectivo" ? "Efectivo" : "Transferencia"}
+                  </Text>
+                </View>
+
+                <Text style={s.sectionLabel}>Nuevo monto:</Text>
+                <View style={s.inputBorder}>
+                  <TextInput
+                    value={renewAmount}
+                    onChangeText={setRenewAmount}
+                    placeholder="Ej: 200.00"
+                    placeholderTextColor={Colors.placeholder}
+                    keyboardType="numeric"
+                  />
+                </View>
+
+                <Text style={s.sectionLabel}>Nota (opcional):</Text>
+                <View style={s.inputBorder}>
+                  <TextInput
+                    value={renewNote}
+                    onChangeText={setRenewNote}
+                    placeholder="Escribe una nota..."
+                    placeholderTextColor={Colors.placeholder}
+                    multiline
+                  />
+                </View>
+
+                <TouchableOpacity
+                  style={[s.paymentBtn, createLoanMutation.isPending && { opacity: 0.6 }]}
+                  onPress={handleRenewLoan}
+                  disabled={createLoanMutation.isPending}
+                >
+                  {createLoanMutation.isPending ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text style={s.btnWhiteText}>Registrar nuevo crédito</Text>
+                  )}
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={Styles.btnSecondary}
+                  onPress={() => {
+                    setRenewModalVisible(false);
+                    setLoanToRenew(null);
+                    setRenewAmount("");
+                    setRenewNote("");
+                  }}
+                >
+                  <Text style={Styles.btnSecondaryText}>Cancelar</Text>
+                </TouchableOpacity>
+              </>
+            )}
           </View>
         </View>
-      </BottomSheet>
+      </Modal>
+
+      <Modal visible={deleteModalVisible} transparent animationType="fade">
+        <View style={Styles.modalOverlay}>
+          <View style={[Styles.modalContent, { alignItems: "center" }]}>
+            <IconSymbol name="exclamationmark.triangle.fill" size={36} color={Colors.delete} />
+            <Text style={[Styles.modalTitle, { marginTop: 12 }]}>Eliminar Préstamo</Text>
+            <Text style={s.sheetMessage}>
+              ¿Estás seguro de que deseas eliminar este préstamo? Esta acción no se puede deshacer.
+            </Text>
+            <View style={s.sheetBtnRow}>
+              <TouchableOpacity
+                style={[s.sheetBtn, s.sheetBtnCancel]}
+                onPress={() => {
+                  setDeleteModalVisible(false);
+                  setLoanToDelete(null);
+                }}
+              >
+                <Text style={s.sheetBtnCancelText}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[s.sheetBtn, s.sheetBtnDanger]} onPress={confirmDelete}>
+                <Text style={s.sheetBtnText}>Eliminar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -705,4 +812,28 @@ const s = StyleSheet.create({
   sheetBtnCancelText: { color: Colors.text, fontWeight: "600" },
   sheetBtnDanger: { backgroundColor: Colors.delete },
   sheetBtnText: { color: Colors.surface, fontWeight: "bold", fontSize: FontSize.md },
+  cardAlert: {
+    backgroundColor: "#fff5f5",
+    borderLeftWidth: 4,
+    borderLeftColor: "#ef4444",
+  },
+  renewCreditBtn: {
+    flex: 1,
+    backgroundColor: "#e8f5e9",
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: Radius.md,
+    alignItems: "center",
+    marginRight: 8,
+  },
+  renewCreditText: { color: "#2e7d32", fontWeight: "700", fontSize: FontSize.sm },
+  renewInfoBox: {
+    width: "100%",
+    backgroundColor: "#f1f5f9",
+    borderRadius: Radius.md,
+    padding: Spacing.md,
+    marginTop: 8,
+    gap: 4,
+  },
+  renewInfoText: { color: Colors.textSecondary, fontSize: FontSize.sm },
 });

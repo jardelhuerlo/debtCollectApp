@@ -11,6 +11,7 @@ export interface Loan {
   payment_method: PaymentMethod | null;
   note: string | null;
   interes: number;
+  last_payment_was_zero: boolean;
   created_at: string;
 }
 
