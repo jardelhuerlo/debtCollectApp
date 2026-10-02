@@ -1,6 +1,5 @@
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import * as Print from "expo-print";
-import { shareAsync } from "expo-sharing";
 import * as Haptics from "expo-haptics";
 import { useEffect, useState, useCallback } from "react";
 import {
@@ -162,8 +161,7 @@ export default function LoansHistoryScreen() {
     `;
 
     try {
-      const { uri } = await Print.printToFileAsync({ html: htmlContent });
-      await shareAsync(uri, { UTI: "com.adobe.pdf", mimeType: "application/pdf" });
+      await Print.printAsync({ html: htmlContent });
     } catch (error) {
       logger.error("PDF generation failed", error);
       showError("Error", "No se pudo generar el PDF");
