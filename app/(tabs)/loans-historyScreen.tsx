@@ -36,7 +36,11 @@ export default function LoansHistoryScreen() {
   const insets = useSafeAreaInsets();
 
   const loansQuery = useLoansQuery();
-  const loans = loansQuery.data ?? [];
+  const allLoans = loansQuery.data ?? [];
+  const [search, setSearch] = useState("");
+  const normalize = (text: string) => text.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+  const query = normalize(search.trim());
+  const loans = query ? allLoans.filter((l) => normalize(l.debtor_name).includes(query)) : allLoans;
   const isLoading = loansQuery.isLoading;
   const isRefetching = loansQuery.isRefetching;
   const refetch = loansQuery.refetch;
@@ -262,7 +266,9 @@ export default function LoansHistoryScreen() {
       onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
     >
       <View style={s.loanHeader}>
-        <Text style={s.loanName}>{item.debtor_name}</Text>
+        <Text style={[s.loanName, item.last_payment_was_zero && s.textOnAlert]}>
+          {item.debtor_name}
+        </Text>
         <TouchableOpacity
           onPress={() => handleDeleteLoan(item.id)}
           style={s.deleteBtn}
@@ -272,13 +278,17 @@ export default function LoansHistoryScreen() {
         </TouchableOpacity>
       </View>
 
-      <Text style={s.loanDate}>{new Date(item.created_at).toLocaleDateString()}</Text>
+      <Text style={[s.loanDate, item.last_payment_was_zero && s.textOnAlert]}>
+        {new Date(item.created_at).toLocaleDateString()}
+      </Text>
 
-      <Text style={s.loanRow}>
+      {item.last_payment_was_zero && <Text style={s.alertLabel}>⚠️ DÍA SIN PAGO</Text>}
+
+      <Text style={[s.loanRow, item.last_payment_was_zero && s.textOnAlert]}>
         💰 Restante: <Text style={{ fontWeight: "bold" }}>${item.remaining}</Text>
       </Text>
 
-      <Text style={s.loanRow}>
+      <Text style={[s.loanRow, item.last_payment_was_zero && s.textOnAlert]}>
         📈 Interés: <Text style={{ fontWeight: "bold" }}>{item.interes}%</Text>
       </Text>
 
@@ -293,7 +303,11 @@ export default function LoansHistoryScreen() {
         <Text style={{ color: Colors.text, fontWeight: "500" }}>{item.status}</Text>
       </View>
 
-      {item.note && <Text style={s.loanNote}>📝 {item.note}</Text>}
+      {item.note && (
+        <Text style={[s.loanNote, item.last_payment_was_zero && s.textOnAlert]}>
+          📝 {item.note}
+        </Text>
+      )}
 
       <View style={s.loanActions}>
         {item.remaining > 0 ? (
@@ -335,6 +349,27 @@ export default function LoansHistoryScreen() {
     <View style={[Styles.safeTop, { paddingTop: insets.top + 10 }]}>
       <Text style={s.pageTitle}>Préstamos</Text>
 
+      <View style={s.searchWrap}>
+        <TextInput
+          style={s.searchInput}
+          value={search}
+          onChangeText={setSearch}
+          placeholder="🔍 Buscar por nombre..."
+          placeholderTextColor={Colors.placeholder}
+          autoCorrect={false}
+          returnKeyType="search"
+        />
+        {search.length > 0 && (
+          <TouchableOpacity
+            style={s.searchClear}
+            onPress={() => setSearch("")}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Text style={s.searchClearText}>✕</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+
       {isLoading ? (
         <View>
           <CardSkeleton />
@@ -347,6 +382,7 @@ export default function LoansHistoryScreen() {
           keyExtractor={(item) => item.id}
           renderItem={renderLoan}
           showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
           refreshControl={
             <RefreshControl
               refreshing={isRefetching}
@@ -354,7 +390,13 @@ export default function LoansHistoryScreen() {
               tintColor={Colors.primary}
             />
           }
-          ListEmptyComponent={<Text style={s.emptyText}>No hay préstamos registrados</Text>}
+          ListEmptyComponent={
+            <Text style={s.emptyText}>
+              {query
+                ? "No se encontraron préstamos con ese nombre"
+                : "No hay préstamos registrados"}
+            </Text>
+          }
         />
       )}
 
@@ -819,10 +861,37 @@ const s = StyleSheet.create({
   sheetBtnDanger: { backgroundColor: Colors.delete },
   sheetBtnText: { color: Colors.surface, fontWeight: "bold", fontSize: FontSize.md },
   cardAlert: {
-    backgroundColor: "#fff5f5",
-    borderLeftWidth: 4,
-    borderLeftColor: "#ef4444",
+    backgroundColor: "#dc2626",
+    borderWidth: 2,
+    borderColor: "#991b1b",
   },
+  textOnAlert: { color: "#ffffff" },
+  alertLabel: {
+    marginTop: 6,
+    alignSelf: "flex-start",
+    backgroundColor: "#7f1d1d",
+    color: "#ffffff",
+    fontWeight: "800",
+    fontSize: FontSize.sm,
+    letterSpacing: 0.5,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: Radius.sm,
+    overflow: "hidden",
+  },
+  searchWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: "#d1d5db",
+    paddingHorizontal: 12,
+    marginBottom: 10,
+  },
+  searchInput: { flex: 1, paddingVertical: 10, fontSize: FontSize.lg, color: Colors.text },
+  searchClear: { paddingLeft: 8, paddingVertical: 6 },
+  searchClearText: { color: Colors.textMuted, fontSize: FontSize.xl, fontWeight: "bold" },
   renewCreditBtn: {
     flex: 1,
     backgroundColor: "#e8f5e9",
