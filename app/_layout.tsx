@@ -30,6 +30,9 @@ export default function RootLayout() {
 
   useEffect(() => {
     const handleDeepLink = ({ url }: { url: string }) => {
+      if (url.startsWith("exp") || url.includes("expo-development-client")) {
+        return;
+      }
       const result = validateDeepLink(url);
       if (!result.valid) {
         logger.warn("Invalid deep link blocked", { url });

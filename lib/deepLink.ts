@@ -1,6 +1,6 @@
 import * as Linking from "expo-linking";
 
-const ALLOWED_SCHEMES = ["debtcollectapp", "https", "http"];
+const ALLOWED_SCHEMES = ["debtcollectapp", "https", "http", "exp", "exp+debtcollectapp-v2"];
 const ALLOWED_HOSTS = ["doognpanlarlvnwkbwdz.supabase.co"];
 const RECOVERY_PATH = "/auth/v1/verify";
 

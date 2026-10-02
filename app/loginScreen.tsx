@@ -22,6 +22,7 @@ import { loginSchema } from "../lib/validation";
 import { showError } from "../lib/toast";
 import { logger } from "../lib/logger";
 import { Colors, Styles, FontSize } from "../constants/styles";
+import { checkSubscription } from "@/services/profile.service";
 
 type LoginForm = z.infer<typeof loginSchema>;
 
@@ -29,6 +30,7 @@ export default function LoginScreen() {
   const router = useRouter();
   const { signIn, isSigningIn, session } = useAuth();
   const passwordRef = useRef<TextInput>(null);
+  const scrollRef = useRef<ScrollView>(null);
   const [showPassword, setShowPassword] = useState(false);
 
   const {
@@ -45,7 +47,13 @@ export default function LoginScreen() {
 
   useEffect(() => {
     if (session) {
-      router.replace("/(tabs)/loans-historyScreen");
+      checkSubscription(session.user.id).then((status) => {
+        if (status.isActive) {
+          router.replace("/(tabs)/loans-historyScreen");
+        } else {
+          router.replace("/subscriptionExpiredScreen");
+        }
+      });
     }
   }, [session, router]);
 
@@ -69,9 +77,14 @@ export default function LoginScreen() {
   return (
     <KeyboardAvoidingView
       style={Styles.screen}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      keyboardVerticalOffset={Platform.OS === "android" ? 0 : 0}
     >
-      <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        ref={scrollRef}
+        contentContainerStyle={s.scroll}
+        keyboardShouldPersistTaps="handled"
+      >
         <View style={Styles.formWrap}>
           <View style={s.logoWrap}>
             <Image source={require("../assets/images/icon.png")} style={s.logo} />
@@ -121,6 +134,7 @@ export default function LoginScreen() {
                       onChange(text);
                       if (errors.password) clearErrors("password");
                     }}
+                    onFocus={() => scrollRef.current?.scrollToEnd({ animated: true })}
                     onSubmitEditing={handleSubmit(onSubmit)}
                     style={Styles.inputFlex}
                   />

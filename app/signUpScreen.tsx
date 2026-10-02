@@ -1,62 +1,82 @@
 import { Ionicons } from "@expo/vector-icons";
-import * as Linking from 'expo-linking';
+import * as Linking from "expo-linking";
 import { useRouter } from "expo-router";
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
+  ScrollView,
   Text,
   TextInput,
   TouchableOpacity,
   View,
+  StyleSheet,
 } from "react-native";
-import { supabase } from "../lib/supabase";
+import { useForm, Controller } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { getPasswordStrength } from "../constants/auth";
+import { useAuth } from "../hooks/useAuth";
+import { signUpSchema } from "../lib/validation";
+import { showSuccess, showError } from "../lib/toast";
+import { logger } from "../lib/logger";
+import { Colors, Styles, FontSize } from "../constants/styles";
+
+type SignUpForm = z.infer<typeof signUpSchema>;
 
 export default function SignUpScreen() {
   const router = useRouter();
+  const { signUp, isSigningUp } = useAuth();
+  const scrollRef = useRef<ScrollView>(null);
+  const emailRef = useRef<TextInput>(null);
+  const passwordRef = useRef<TextInput>(null);
+  const confirmRef = useRef<TextInput>(null);
 
-  const [fullName, setFullName] = useState("");   // 👈 Nuevo campo
-  const [email, setEmail] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
   const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false); // 👁️
-  const [loading, setLoading] = useState(false);
 
-  const handleSignUp = async () => {
-    if (!email || !password || !fullName) {
-      Alert.alert("Error", "Debes ingresar tu nombre, email y contraseña.");
-      return;
-    }
+  const {
+    control,
+    handleSubmit,
+    formState: { errors },
+    clearErrors,
+  } = useForm<SignUpForm>({
+    resolver: zodResolver(signUpSchema),
+    defaultValues: {
+      fullName: "",
+      email: "",
+      password: "",
+      confirmPassword: "",
+      acceptedTerms: false,
+    },
+    mode: "onSubmit",
+  });
 
-    setLoading(true);
+  const strength = getPasswordStrength(password);
 
-    const redirectUrl = Linking.createURL('/(tabs)/loans-historyScreen');
-
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        emailRedirectTo: redirectUrl,
-        data: {
-          full_name: fullName,  // 👈 IMPORTANTE: esto llega a tu trigger
-        }
-      },
-    });
-
-    setLoading(false);
+  const onSubmit = async (data: SignUpForm) => {
+    Keyboard.dismiss();
+    const { error, session } = await signUp(data.email, data.password, data.fullName);
 
     if (error) {
-      Alert.alert("Error al registrarse", error.message);
+      logger.error("Sign up failed", error);
+      if (error.message.toLowerCase().includes("already registered")) {
+        showError("Correo en uso", "Este correo ya tiene una cuenta. Intenta iniciar sesión.");
+      } else {
+        showError("Error", "Error de conexión. Verifica tu internet e intenta de nuevo.");
+      }
       return;
     }
 
-    if (data.session) {
+    if (session) {
       router.replace("/(tabs)/loans-historyScreen");
     } else {
-      Alert.alert(
-        "Registro exitoso",
-        "Por favor verifica tu correo electrónico para confirmar tu cuenta."
+      showSuccess(
+        "¡Registro exitoso!",
+        "Te enviamos un correo de verificación. Revisa tu bandeja de entrada y spam."
       );
       router.back();
     }
@@ -64,132 +84,245 @@ export default function SignUpScreen() {
 
   return (
     <KeyboardAvoidingView
-      style={{ flex: 1 }}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      style={Styles.screen}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
-      <View
-        style={{
-          flex: 1,
-          backgroundColor: "#f8fafc",
-          alignItems: "center",
-          justifyContent: "center",
-          paddingHorizontal: 30,
-        }}
+      <ScrollView
+        ref={scrollRef}
+        contentContainerStyle={s.scroll}
+        keyboardShouldPersistTaps="handled"
       >
-        <Text style={{ fontSize: 26, fontWeight: "bold", marginBottom: 6, color: "#1e293b" }}>
-          Crear Cuenta
-        </Text>
+        <View style={Styles.formWrap}>
+          <Text style={Styles.title}>Crear Cuenta</Text>
+          <Text style={Styles.subtitle}>Regístrate para comenzar a usar la app</Text>
 
-        <Text style={{ fontSize: 14, color: "#64748b", marginBottom: 25, textAlign: "center" }}>
-          Registrate para comenzar a usar la app
-        </Text>
+          <View style={Styles.inputWrap}>
+            <Controller
+              control={control}
+              name="fullName"
+              render={({ field: { onChange, value } }) => (
+                <TextInput
+                  placeholder="Nombre completo"
+                  placeholderTextColor={Colors.placeholder}
+                  autoCapitalize="words"
+                  returnKeyType="next"
+                  value={value}
+                  onChangeText={(text) => {
+                    onChange(text);
+                    if (errors.fullName) clearErrors("fullName");
+                  }}
+                  onSubmitEditing={() => emailRef.current?.focus()}
+                  style={[Styles.input, errors.fullName && Styles.inputDanger]}
+                />
+              )}
+            />
+            {errors.fullName && <Text style={Styles.error}>{errors.fullName.message}</Text>}
+          </View>
 
-        {/* Nombre */}
-        <TextInput
-          placeholder="Nombre completo"
-          placeholderTextColor="#94a3b8"
-          value={fullName}
-          onChangeText={setFullName}
-          style={{
-            width: "100%",
-            backgroundColor: "white",
-            borderRadius: 12,
-            padding: 14,
-            borderWidth: 1,
-            borderColor: "#e2e8f0",
-            marginBottom: 14,
-            fontSize: 16,
-          }}
-        />
+          <View style={Styles.inputWrap}>
+            <Controller
+              control={control}
+              name="email"
+              render={({ field: { onChange, value } }) => (
+                <TextInput
+                  ref={emailRef}
+                  placeholder="Correo electrónico"
+                  placeholderTextColor={Colors.placeholder}
+                  autoCapitalize="none"
+                  keyboardType="email-address"
+                  returnKeyType="next"
+                  value={value}
+                  onChangeText={(text) => {
+                    onChange(text);
+                    if (errors.email) clearErrors("email");
+                  }}
+                  onSubmitEditing={() => passwordRef.current?.focus()}
+                  style={[Styles.input, errors.email && Styles.inputDanger]}
+                />
+              )}
+            />
+            {errors.email && <Text style={Styles.error}>{errors.email.message}</Text>}
+          </View>
 
-        {/* Email */}
-        <TextInput
-          placeholder="Correo electrónico"
-          placeholderTextColor="#94a3b8"
-          autoCapitalize="none"
-          keyboardType="email-address"
-          value={email}
-          onChangeText={setEmail}
-          style={{
-            width: "100%",
-            backgroundColor: "white",
-            borderRadius: 12,
-            padding: 14,
-            borderWidth: 1,
-            borderColor: "#e2e8f0",
-            marginBottom: 14,
-            fontSize: 16,
-          }}
-        />
+          <View style={s.passWrap}>
+            <View style={[Styles.inputRow, errors.password && Styles.inputRowDanger]}>
+              <Controller
+                control={control}
+                name="password"
+                render={({ field: { onChange, value } }) => (
+                  <TextInput
+                    ref={passwordRef}
+                    placeholder="Contraseña"
+                    placeholderTextColor={Colors.placeholder}
+                    secureTextEntry={!showPassword}
+                    returnKeyType="next"
+                    value={value}
+                    onChangeText={(text) => {
+                      onChange(text);
+                      setPassword(text);
+                      if (errors.password) clearErrors("password");
+                    }}
+                    onFocus={() => scrollRef.current?.scrollToEnd({ animated: true })}
+                    onSubmitEditing={() => confirmRef.current?.focus()}
+                    style={Styles.inputFlex}
+                  />
+                )}
+              />
+              <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={s.eyeBtn}>
+                <Ionicons
+                  name={showPassword ? "eye-off" : "eye"}
+                  size={22}
+                  color={Colors.textSecondary}
+                />
+              </TouchableOpacity>
+            </View>
 
-        {/* PASSWORD + 👁️ */}
-        <View
-          style={{
-            width: "100%",
-            backgroundColor: "white",
-            borderRadius: 12,
-            borderWidth: 1,
-            borderColor: "#e2e8f0",
-            marginBottom: 20,
-            flexDirection: "row",
-            alignItems: "center",
-          }}
-        >
-          <TextInput
-            placeholder="Contraseña"
-            placeholderTextColor="#94a3b8"
-            secureTextEntry={!showPassword} // 🔑 asteriscos
-            value={password}
-            onChangeText={setPassword}
-            style={{
-              flex: 1,
-              padding: 14,
-              fontSize: 16,
-              color: "#1e293b",
-            }}
-          />
+            {password.length > 0 && (
+              <View style={s.strengthWrap}>
+                <View style={s.strengthBar}>
+                  {(["weak", "medium", "strong"] as const).map((level, i) => (
+                    <View
+                      key={i}
+                      style={[
+                        s.strengthSegment,
+                        {
+                          backgroundColor:
+                            (strength.level === "weak" && i === 0) ||
+                            (strength.level === "medium" && i <= 1) ||
+                            strength.level === "strong"
+                              ? strength.color
+                              : Colors.border,
+                        },
+                      ]}
+                    />
+                  ))}
+                </View>
+                <Text style={[s.strengthLabel, { color: strength.color }]}>
+                  Contraseña {strength.label}
+                </Text>
+              </View>
+            )}
+
+            {errors.password && <Text style={Styles.error}>{errors.password.message}</Text>}
+          </View>
+
+          <View style={s.confirmWrap}>
+            <View style={[Styles.inputRow, errors.confirmPassword && Styles.inputRowDanger]}>
+              <Controller
+                control={control}
+                name="confirmPassword"
+                render={({ field: { onChange, value } }) => (
+                  <TextInput
+                    ref={confirmRef}
+                    placeholder="Confirmar contraseña"
+                    placeholderTextColor={Colors.placeholder}
+                    secureTextEntry={!showConfirm}
+                    returnKeyType="done"
+                    value={value}
+                    onChangeText={(text) => {
+                      onChange(text);
+                      if (errors.confirmPassword) clearErrors("confirmPassword");
+                    }}
+                    onFocus={() => scrollRef.current?.scrollToEnd({ animated: true })}
+                    onSubmitEditing={handleSubmit(onSubmit)}
+                    style={Styles.inputFlex}
+                  />
+                )}
+              />
+              <TouchableOpacity onPress={() => setShowConfirm(!showConfirm)} style={s.eyeBtn}>
+                <Ionicons
+                  name={showConfirm ? "eye-off" : "eye"}
+                  size={22}
+                  color={Colors.textSecondary}
+                />
+              </TouchableOpacity>
+            </View>
+            {errors.confirmPassword && (
+              <Text style={Styles.error}>{errors.confirmPassword.message}</Text>
+            )}
+          </View>
+
+          <View style={s.termsWrap}>
+            <Controller
+              control={control}
+              name="acceptedTerms"
+              render={({ field: { onChange, value } }) => (
+                <TouchableOpacity
+                  onPress={() => {
+                    onChange(!value);
+                    if (errors.acceptedTerms) clearErrors("acceptedTerms");
+                  }}
+                  style={s.termsBtn}
+                  activeOpacity={0.7}
+                >
+                  <View
+                    style={[
+                      s.checkbox,
+                      {
+                        borderColor: value ? Colors.primary : "#cbd5e1",
+                        backgroundColor: value ? Colors.primary : Colors.surface,
+                      },
+                    ]}
+                  >
+                    {value && <Ionicons name="checkmark" size={14} color="white" />}
+                  </View>
+                  <Text style={s.termsText}>
+                    Acepto los <Text style={s.termsLink}>Términos y Condiciones</Text> y la{" "}
+                    <Text style={s.termsLink}>Política de Privacidad</Text>
+                  </Text>
+                </TouchableOpacity>
+              )}
+            />
+            {errors.acceptedTerms && (
+              <Text style={[Styles.error, { marginTop: 0, marginBottom: 12 }]}>
+                {errors.acceptedTerms.message}
+              </Text>
+            )}
+          </View>
 
           <TouchableOpacity
-            onPress={() => setShowPassword(!showPassword)}
-            style={{ paddingHorizontal: 14 }}
+            onPress={handleSubmit(onSubmit)}
+            disabled={isSigningUp}
+            style={[Styles.btnPrimary, isSigningUp && Styles.btnPrimaryDisabled]}
           >
-            <Ionicons
-              name={showPassword ? "eye-off" : "eye"}
-              size={22}
-              color="#64748b"
-            />
+            {isSigningUp ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={Styles.btnPrimaryText}>Registrarse</Text>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity onPress={() => router.back()}>
+            <Text style={Styles.link}>
+              ¿Ya tienes cuenta? <Text style={Styles.linkBold}>Inicia sesión</Text>
+            </Text>
           </TouchableOpacity>
         </View>
-
-        {/* Botón */}
-        <TouchableOpacity
-          onPress={handleSignUp}
-          disabled={loading}
-          style={{
-            width: "100%",
-            backgroundColor: "#2563eb",
-            padding: 16,
-            borderRadius: 12,
-            alignItems: "center",
-            elevation: 4,
-            marginBottom: 20,
-          }}
-        >
-          {loading ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={{ color: "white", fontSize: 17, fontWeight: "600" }}>
-              Registrarse
-            </Text>
-          )}
-        </TouchableOpacity>
-
-        <TouchableOpacity onPress={() => router.back()}>
-          <Text style={{ color: "#2563eb", fontSize: 16 }}>
-            ¿Ya tienes cuenta? Inicia sesión
-          </Text>
-        </TouchableOpacity>
-      </View>
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 }
+
+const s = StyleSheet.create({
+  scroll: { flexGrow: 1 },
+  eyeBtn: { paddingHorizontal: 14 },
+  passWrap: { width: "100%", marginBottom: 6 },
+  strengthWrap: { marginTop: 8 },
+  strengthBar: { flexDirection: "row", gap: 4, marginBottom: 4 },
+  strengthSegment: { flex: 1, height: 4, borderRadius: 2 },
+  strengthLabel: { fontSize: FontSize.xs, marginLeft: 2 },
+  confirmWrap: { width: "100%", marginBottom: 20 },
+  termsWrap: { width: "100%", marginBottom: 24 },
+  termsBtn: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 2,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 1,
+  },
+  termsText: { flex: 1, fontSize: FontSize.sm, color: Colors.textSecondary, lineHeight: 20 },
+  termsLink: { color: Colors.link, fontWeight: "600" },
+});

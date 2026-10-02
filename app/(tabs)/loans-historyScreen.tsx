@@ -157,7 +157,7 @@ export default function LoansHistoryScreen() {
 
     try {
       const { uri } = await Print.printToFileAsync({ html: htmlContent });
-      await shareAsync(uri, { UTI: ".pdf", mimeType: "application/pdf" });
+      await shareAsync(uri, { UTI: "com.adobe.pdf", mimeType: "application/pdf" });
     } catch (error) {
       logger.error("PDF generation failed", error);
       showError("Error", "No se pudo generar el PDF");
@@ -458,7 +458,9 @@ export default function LoansHistoryScreen() {
             <Text style={Styles.modalTitle}>Historial de Pagos</Text>
 
             <ScrollView style={{ marginTop: 10 }}>
-              {payments.length === 0 ? (
+              {paymentsQuery.isLoading ? (
+                <ActivityIndicator size="large" color={Colors.primary} style={{ marginTop: 20 }} />
+              ) : payments.length === 0 ? (
                 <Text style={s.emptyPayments}>No hay pagos registrados.</Text>
               ) : (
                 (payments as Payment[]).map((p) => {
@@ -549,7 +551,14 @@ export default function LoansHistoryScreen() {
               )}
             </ScrollView>
 
-            <TouchableOpacity style={s.pdfBtn} onPress={generatePDF}>
+            <TouchableOpacity
+              style={[
+                s.pdfBtn,
+                (paymentsQuery.isLoading || payments.length === 0) && { opacity: 0.4 },
+              ]}
+              onPress={generatePDF}
+              disabled={paymentsQuery.isLoading || payments.length === 0}
+            >
               <IconSymbol name="square.and.arrow.up" size={18} color="white" />
               <Text style={s.btnWhiteText}>Descargar PDF</Text>
             </TouchableOpacity>

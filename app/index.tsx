@@ -3,6 +3,7 @@ import { useRouter } from "expo-router";
 import { useEffect } from "react";
 import { ActivityIndicator, View } from "react-native";
 import { Styles } from "../constants/styles";
+import { checkSubscription } from "@/services/profile.service";
 
 export default function Index() {
   const router = useRouter();
@@ -12,7 +13,12 @@ export default function Index() {
       const { data } = await supabase.auth.getSession();
 
       if (data.session) {
-        router.replace("/(tabs)/loans-historyScreen");
+        const status = await checkSubscription(data.session.user.id);
+        if (status.isActive) {
+          router.replace("/(tabs)/loans-historyScreen");
+        } else {
+          router.replace("/subscriptionExpiredScreen");
+        }
       } else {
         router.replace("/loginScreen");
       }

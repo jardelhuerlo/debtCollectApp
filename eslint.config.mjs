@@ -38,6 +38,8 @@ export default [
       "coverage/",
       "android/",
       "ios/",
+      "supabase/**",
+      "**/supabase/**",
       "jest.config.js",
       "jest.unit.config.js",
       "jest.setup.js",

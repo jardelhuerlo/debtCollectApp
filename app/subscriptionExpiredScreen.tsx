@@ -1,27 +1,71 @@
 import { supabase } from "@/lib/supabase";
 import { useRouter } from "expo-router";
-import { Text, TouchableOpacity, View, StyleSheet } from "react-native";
-import { Colors, Styles, FontSize, Radius } from "../constants/styles";
+import { useEffect, useState } from "react";
+import { Text, TouchableOpacity, View, StyleSheet, Linking } from "react-native";
+import { Colors, Styles, FontSize, Radius, Spacing } from "../constants/styles";
+import { checkSubscription } from "@/services/profile.service";
+
+// TODO: Reemplazar con el número de WhatsApp de soporte (+593XXXXXXXXX)
+const SUPPORT_WHATSAPP = "";
 
 export default function SubscriptionExpiredScreen() {
   const router = useRouter();
+  const [daysRemaining, setDaysRemaining] = useState<number | null>(null);
+  const [expiresAt, setExpiresAt] = useState<Date | null>(null);
+
+  useEffect(() => {
+    const check = async () => {
+      const user = await supabase.auth.getUser().then((r) => r.data.user);
+      if (!user) return;
+      const status = await checkSubscription(user.id);
+      setDaysRemaining(status.daysRemaining);
+      setExpiresAt(status.expiresAt);
+    };
+    check();
+  }, []);
 
   const signOut = async () => {
     await supabase.auth.signOut();
     router.replace("/loginScreen");
   };
 
+  const contactSupport = () => {
+    if (SUPPORT_WHATSAPP) {
+      Linking.openURL(`https://wa.me/${SUPPORT_WHATSAPP}`);
+    }
+  };
+
   return (
     <View style={s.container}>
-      <Text style={s.heading}>Suscripción expirada</Text>
+      <View style={s.iconWrap}>
+        <Text style={s.icon}>🔒</Text>
+      </View>
+
+      <Text style={s.heading}>Suscripción Expirada</Text>
 
       <Text style={s.description}>
-        Tu suscripción ha expirado. Contacta con soporte para reactivarla.
+        Tu suscripción ha expirado. Para seguir usando PayTrack, contacta con soporte para
+        reactivarla.
       </Text>
 
-      <TouchableOpacity onPress={() => router.replace("/(tabs)/userScreen")} style={s.primaryBtn}>
-        <Text style={s.btnText}>Ir a mi perfil</Text>
-      </TouchableOpacity>
+      {expiresAt && (
+        <View style={s.infoCard}>
+          <Text style={s.infoLabel}>Expiró el:</Text>
+          <Text style={s.infoValue}>
+            {expiresAt.toLocaleDateString("es-EC", {
+              day: "2-digit",
+              month: "long",
+              year: "numeric",
+            })}
+          </Text>
+        </View>
+      )}
+
+      {SUPPORT_WHATSAPP ? (
+        <TouchableOpacity onPress={contactSupport} style={s.primaryBtn}>
+          <Text style={s.btnText}>💬 Contactar Soporte para Renovar</Text>
+        </TouchableOpacity>
+      ) : null}
 
       <TouchableOpacity onPress={signOut} style={s.dangerBtn}>
         <Text style={s.btnText}>Cerrar sesión</Text>
@@ -33,38 +77,79 @@ export default function SubscriptionExpiredScreen() {
 const s = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 20,
+    padding: Spacing.xxl,
     justifyContent: "center",
     alignItems: "center",
     backgroundColor: Colors.surface,
   },
-  heading: {
-    fontSize: FontSize.titleXl,
-    fontWeight: "bold",
-    marginBottom: 10,
-    color: Colors.text,
+  iconWrap: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: Colors.deleteBg,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: Spacing.xl,
   },
-  description: {
-    fontSize: FontSize.lg,
-    color: Colors.textGray,
+  icon: { fontSize: 40 },
+  heading: {
+    fontSize: FontSize.title,
+    fontWeight: "bold",
+    marginBottom: Spacing.md,
+    color: Colors.text,
     textAlign: "center",
   },
-  primaryBtn: {
-    marginTop: 30,
-    backgroundColor: "#007bff",
-    paddingVertical: 14,
-    paddingHorizontal: 30,
-    borderRadius: Radius.md,
+  description: {
+    fontSize: FontSize.md,
+    color: Colors.textSecondary,
+    textAlign: "center",
+    lineHeight: 22,
+    marginBottom: Spacing.xxl,
   },
+  infoCard: {
+    backgroundColor: Colors.backgroundGray,
+    borderRadius: Radius.md,
+    padding: Spacing.lg,
+    marginBottom: Spacing.xxl,
+    width: "100%",
+    alignItems: "center",
+  },
+  infoLabel: {
+    fontSize: FontSize.sm,
+    color: Colors.textSecondary,
+    marginBottom: 4,
+  },
+  infoValue: {
+    fontSize: FontSize.lg,
+    fontWeight: "600",
+    color: Colors.text,
+  },
+  primaryBtn: {
+    width: "100%",
+    backgroundColor: Colors.primary,
+    paddingVertical: 14,
+    borderRadius: Radius.md,
+    alignItems: "center",
+    marginBottom: Spacing.md,
+  },
+  secondaryBtn: {
+    width: "100%",
+    paddingVertical: 14,
+    borderRadius: Radius.md,
+    alignItems: "center",
+    marginBottom: Spacing.md,
+  },
+  secondaryBtnText: { color: Colors.textSecondary, fontSize: FontSize.lg },
   dangerBtn: {
-    marginTop: 30,
+    width: "100%",
     backgroundColor: Colors.delete,
     paddingVertical: 14,
-    paddingHorizontal: 30,
     borderRadius: Radius.md,
+    alignItems: "center",
   },
   btnText: {
     color: Colors.surface,
     fontWeight: "bold",
+    fontSize: FontSize.lg,
   },
 });

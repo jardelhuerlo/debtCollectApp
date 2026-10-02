@@ -11,6 +11,7 @@ import { checkSubscription } from "@/services/profile.service";
 export default function TabLayout() {
   const colorScheme = useColorScheme();
   const [initialRoute, setInitialRoute] = useState<string | null>(null);
+  const [isSubActive, setIsSubActive] = useState(true);
   const activeColor = "#4f9cff";
   const inactiveColor = "#9ca3af";
 
@@ -23,9 +24,10 @@ export default function TabLayout() {
         return;
       }
 
-      const { isActive } = await checkSubscription(session.user.id);
+      const status = await checkSubscription(session.user.id);
+      setIsSubActive(status.isActive);
 
-      if (!isActive) {
+      if (!status.isActive) {
         setInitialRoute("userScreen");
       } else {
         setInitialRoute("loans-historyScreen");
@@ -60,6 +62,7 @@ export default function TabLayout() {
         name="loans-historyScreen"
         options={{
           title: "Préstamo",
+          href: isSubActive ? undefined : null,
           tabBarIcon: ({ color }) => <IconSymbol size={28} name="banknote.fill" color={color} />,
         }}
       />
@@ -68,6 +71,7 @@ export default function TabLayout() {
         name="loansScreen"
         options={{
           title: "Registro",
+          href: isSubActive ? undefined : null,
           tabBarIcon: ({ color }) => <IconSymbol size={28} name="plus.circle.fill" color={color} />,
         }}
       />

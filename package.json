@@ -80,7 +80,7 @@
   },
   "private": true,
   "lint-staged": {
-    "*.{ts,tsx}": [
+    "{app,hooks,services,lib,constants,components}/**/*.{ts,tsx}": [
       "eslint --fix",
       "prettier --write"
     ],

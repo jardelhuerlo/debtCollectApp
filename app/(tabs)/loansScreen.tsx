@@ -11,6 +11,7 @@ import {
   StyleSheet,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useRouter } from "expo-router";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -25,6 +26,7 @@ import type { PaymentMethod } from "@/types";
 type LoanForm = z.infer<typeof loanSchema>;
 
 export default function LoansScreen() {
+  const router = useRouter();
   const createLoanMutation = useCreateLoanMutation();
 
   const {
@@ -32,6 +34,7 @@ export default function LoansScreen() {
     handleSubmit,
     formState: { errors },
     clearErrors,
+    reset,
     watch,
   } = useForm<LoanForm>({
     resolver: zodResolver(loanSchema),
@@ -68,7 +71,8 @@ export default function LoansScreen() {
       {
         onSuccess: () => {
           showSuccess("Éxito", "Préstamo registrado correctamente.");
-          clearErrors();
+          reset();
+          router.replace("/loans-historyScreen");
         },
         onError: (error) => {
           logger.error("Create loan failed", error);

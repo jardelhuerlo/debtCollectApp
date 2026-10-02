@@ -105,9 +105,11 @@ export function useRegisterPaymentMutation(onSuccess?: () => void) {
       if (!user) throw new Error("No user");
       const { error } = await registerPayment({ payerId: user.id, ...params });
       if (error) throw error;
+      return params.loanId;
     },
-    onSuccess: () => {
+    onSuccess: (loanId) => {
       queryClient.invalidateQueries({ queryKey: [LOANS_KEY] });
+      queryClient.invalidateQueries({ queryKey: ["payments", loanId] });
       onSuccess?.();
     },
   });
@@ -122,9 +124,11 @@ export function useRegisterZeroPaymentMutation(onSuccess?: () => void) {
       if (!user) throw new Error("No user");
       const { error } = await registerZeroPayment({ loanId, payerId: user.id });
       if (error) throw error;
+      return loanId;
     },
-    onSuccess: () => {
+    onSuccess: (loanId) => {
       queryClient.invalidateQueries({ queryKey: [LOANS_KEY] });
+      queryClient.invalidateQueries({ queryKey: ["payments", loanId] });
       onSuccess?.();
     },
   });
