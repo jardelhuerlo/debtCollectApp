@@ -1,4 +1,6 @@
 import { useRouter } from "expo-router";
+import { AppIcon } from "@/components/ui/app-icon";
+import { IconLabel } from "@/components/ui/icon-label";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Linking, Text, TouchableOpacity, View, StyleSheet } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -107,7 +109,7 @@ export default function SubscribeScreen() {
     return (
       <View style={[s.container, { paddingTop: insets.top + Spacing.xxl }]}>
         <View style={s.iconWrap}>
-          <Text style={s.icon}>✅</Text>
+          <AppIcon name="check-circle" size={44} color="#22c55e" />
         </View>
         <Text style={s.heading}>Suscripción Activa</Text>
         <Text style={s.description}>
@@ -124,7 +126,7 @@ export default function SubscribeScreen() {
   return (
     <View style={[s.container, { paddingTop: insets.top + Spacing.xxl }]}>
       <View style={s.iconWrap}>
-        <Text style={s.icon}>⭐</Text>
+        <AppIcon name="star" size={44} color="#f59e0b" />
       </View>
 
       <Text style={s.heading}>PayTrack Premium</Text>
@@ -138,10 +140,18 @@ export default function SubscribeScreen() {
           <Text style={s.planPrice}>$5 USD/mes</Text>
         </View>
         <View style={s.planFeatures}>
-          <Text style={s.feature}>✓ Préstamos ilimitados</Text>
-          <Text style={s.feature}>✓ Historial completo de pagos</Text>
-          <Text style={s.feature}>✓ Exportar reportes PDF</Text>
-          <Text style={s.feature}>✓ Soporte prioritario</Text>
+          <IconLabel icon="check" iconColor="#16a34a" color={Colors.text} textStyle={s.feature}>
+            Préstamos ilimitados
+          </IconLabel>
+          <IconLabel icon="check" iconColor="#16a34a" color={Colors.text} textStyle={s.feature}>
+            Historial completo de pagos
+          </IconLabel>
+          <IconLabel icon="check" iconColor="#16a34a" color={Colors.text} textStyle={s.feature}>
+            Exportar reportes PDF
+          </IconLabel>
+          <IconLabel icon="check" iconColor="#16a34a" color={Colors.text} textStyle={s.feature}>
+            Soporte prioritario
+          </IconLabel>
         </View>
       </View>
 

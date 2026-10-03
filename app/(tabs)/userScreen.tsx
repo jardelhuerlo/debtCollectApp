@@ -12,6 +12,7 @@ import type { Profile } from "@/types";
 import { ProfileSkeleton } from "@/components/SkeletonLoader";
 import { checkSubscription } from "@/services/profile.service";
 import type { SubscriptionStatus } from "@/services/profile.service";
+import { IconLabel } from "@/components/ui/icon-label";
 
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
@@ -86,37 +87,68 @@ export default function ProfileScreen() {
 
         <View style={Styles.profileCard}>
           <Text style={Styles.profileName}>{profile.full_name}</Text>
-          <Text style={Styles.profileRow}>🔹 Rol: {profile.role}</Text>
+          <IconLabel
+            icon="badge"
+            size={20}
+            color={Colors.textGray}
+            style={s.profileRow}
+            textStyle={s.profileRowText}
+          >
+            Rol: {profile.role}
+          </IconLabel>
 
-          <Text style={Styles.profileRow}>
-            🔹 Estado:{" "}
+          <IconLabel
+            icon={isActive ? "verified-user" : "error-outline"}
+            size={20}
+            color={Colors.textGray}
+            style={s.profileRow}
+            textStyle={s.profileRowText}
+          >
+            Estado:{" "}
             <Text style={{ color: isActive ? "#22c55e" : Colors.delete, fontWeight: "700" }}>
               {isActive ? "Activa" : "Expirada"}
             </Text>
-          </Text>
+          </IconLabel>
 
           {isActive && daysRemaining > 0 && (
-            <Text style={[Styles.profileRow, isExpiringSoon && { color: "#e65100" }]}>
-              🔹 {isExpiringSoon ? "⚠️ Expira en" : "Expira en"} {daysRemaining}{" "}
-              {daysRemaining === 1 ? "día" : "días"}
-            </Text>
+            <IconLabel
+              icon={isExpiringSoon ? "warning" : "schedule"}
+              size={20}
+              color={isExpiringSoon ? "#e65100" : Colors.textGray}
+              style={s.profileRow}
+              textStyle={s.profileRowText}
+            >
+              Expira en {daysRemaining} {daysRemaining === 1 ? "día" : "días"}
+            </IconLabel>
           )}
 
           {!isActive && (
-            <Text style={[Styles.profileRow, { color: Colors.delete }]}>
-              🔹 Tu suscripción ha expirado
-            </Text>
+            <IconLabel
+              icon="error-outline"
+              size={20}
+              color={Colors.delete}
+              style={s.profileRow}
+              textStyle={s.profileRowText}
+            >
+              Tu suscripción ha expirado
+            </IconLabel>
           )}
 
           {profile.subscription_expires && (
-            <Text style={Styles.profileRow}>
-              🔹 Vence:{" "}
+            <IconLabel
+              icon="event"
+              size={20}
+              color={Colors.textGray}
+              style={s.profileRow}
+              textStyle={s.profileRowText}
+            >
+              Vence:{" "}
               {new Date(profile.subscription_expires).toLocaleDateString("es-EC", {
                 day: "2-digit",
                 month: "long",
                 year: "numeric",
               })}
-            </Text>
+            </IconLabel>
           )}
         </View>
       </View>
@@ -140,6 +172,8 @@ export default function ProfileScreen() {
 }
 
 const s = StyleSheet.create({
+  profileRow: { marginBottom: 8 },
+  profileRowText: { fontSize: FontSize.lg },
   adminBtn: {
     width: "100%",
     backgroundColor: "#1e293b",

@@ -16,7 +16,7 @@ export function SubscriptionWarningBanner({ daysRemaining }: Props) {
   return (
     <View style={s.banner}>
       <IconSymbol name="exclamationmark.triangle.fill" size={16} color="#92400e" />
-      <Text style={s.text}>⚠️ {message}. Contacta al administrador.</Text>
+      <Text style={s.text}>{message}. Contacta al administrador.</Text>
     </View>
   );
 }

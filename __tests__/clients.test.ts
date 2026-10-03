@@ -1,4 +1,13 @@
-import { groupLoansByClient, normalizeClientName, suggestClientNames } from "@/lib/clients";
+import {
+  getClientLoans,
+  getClientTotals,
+  getLoanPaid,
+  getLoanTotal,
+  getPreviousLoan,
+  groupLoansByClient,
+  normalizeClientName,
+  suggestClientNames,
+} from "@/lib/clients";
 import type { Loan } from "@/types";
 
 function makeLoan(overrides: Partial<Loan> & { id: string }): Loan {
@@ -147,5 +156,62 @@ describe("suggestClientNames", () => {
   it("returns nothing for blank text and respects the limit", () => {
     expect(suggestClientNames(loans, "  ")).toEqual([]);
     expect(suggestClientNames(loans, "ju", 1)).toHaveLength(1);
+  });
+});
+
+describe("loan amounts", () => {
+  it("adds the interest to the original amount", () => {
+    expect(getLoanTotal(makeLoan({ id: "a", original_amount: 200, interes: 10 }))).toBe(220);
+    expect(getLoanTotal(makeLoan({ id: "a", original_amount: 100, interes: 0 }))).toBe(100);
+  });
+
+  it("computes what has been paid so far", () => {
+    const loan = makeLoan({ id: "a", original_amount: 200, interes: 10, remaining: 170 });
+    expect(getLoanPaid(loan)).toBe(50);
+    expect(
+      getLoanPaid(makeLoan({ id: "b", original_amount: 200, interes: 10, remaining: 0 }))
+    ).toBe(220);
+  });
+
+  it("never reports a negative paid amount", () => {
+    expect(
+      getLoanPaid(makeLoan({ id: "a", original_amount: 100, interes: 0, remaining: 150 }))
+    ).toBe(0);
+  });
+});
+
+describe("client history helpers", () => {
+  const loans = [
+    makeLoan({
+      id: "old",
+      original_amount: 200,
+      interes: 10,
+      remaining: 0,
+      created_at: "2026-09-01T10:00:00Z",
+    }),
+    makeLoan({
+      id: "new",
+      original_amount: 300,
+      interes: 5,
+      remaining: 315,
+      renewed_from: "old",
+      renewal_number: 1,
+      created_at: "2026-10-01T10:00:00Z",
+    }),
+    makeLoan({ id: "other", client_id: "client-ana", client: { id: "client-ana", name: "Ana" } }),
+  ];
+
+  it("lists only the loans of one client, newest first", () => {
+    expect(getClientLoans(loans, "client-juan").map((l) => l.id)).toEqual(["new", "old"]);
+  });
+
+  it("sums lent, paid and remaining amounts", () => {
+    const totals = getClientTotals(getClientLoans(loans, "client-juan"));
+    expect(totals).toEqual({ lent: 500, paid: 220, remaining: 315 });
+  });
+
+  it("finds the loan a renewal came from", () => {
+    expect(getPreviousLoan(loans[1], loans)?.id).toBe("old");
+    expect(getPreviousLoan(loans[0], loans)).toBeUndefined();
   });
 });

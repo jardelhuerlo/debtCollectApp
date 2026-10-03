@@ -17,6 +17,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import * as Haptics from "expo-haptics";
 import { useCreateLoanMutation, useLoansQuery } from "@/hooks/useQueryLoans";
+import { IconLabel } from "@/components/ui/icon-label";
 import { getLoanClientName, normalizeClientName, suggestClientNames } from "@/lib/clients";
 import { loanSchema } from "@/lib/validation";
 import { showSuccess, showError } from "@/lib/toast";
@@ -129,15 +130,22 @@ export default function LoansScreen() {
                             if (errors.debtor_name) clearErrors("debtor_name");
                           }}
                         >
-                          <Text style={s.suggestText}>👤 {name}</Text>
+                          <IconLabel icon="person" color={Colors.text} textStyle={s.suggestText}>
+                            {name}
+                          </IconLabel>
                         </TouchableOpacity>
                       ))}
                     </View>
                   )}
                   {isExisting && (
-                    <Text style={s.existingHint}>
-                      ✔ Cliente existente: se agregará un nuevo crédito a su nombre.
-                    </Text>
+                    <IconLabel
+                      icon="check-circle"
+                      color={Colors.success}
+                      style={s.existingHint}
+                      textStyle={s.existingHintText}
+                    >
+                      Cliente existente: se agregará un nuevo crédito a su nombre.
+                    </IconLabel>
                   )}
                 </>
               );
@@ -271,7 +279,8 @@ const s = StyleSheet.create({
     borderBottomColor: "#f1f5f9",
   },
   suggestText: { fontSize: FontSize.lg, color: Colors.text },
-  existingHint: { marginBottom: 8, fontSize: FontSize.md, color: Colors.success },
+  existingHint: { marginBottom: 8 },
+  existingHintText: { fontSize: FontSize.md },
   heading: { fontSize: FontSize.title, fontWeight: "bold", marginBottom: 20, color: Colors.text },
   preview: {
     fontSize: FontSize.xxl,

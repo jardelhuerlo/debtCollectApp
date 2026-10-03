@@ -1,4 +1,6 @@
 import { supabase } from "@/lib/supabase";
+import { AppIcon } from "@/components/ui/app-icon";
+import { IconLabel } from "@/components/ui/icon-label";
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import { Text, TouchableOpacity, View, StyleSheet, Linking } from "react-native";
@@ -38,7 +40,7 @@ export default function SubscriptionExpiredScreen() {
   return (
     <View style={s.container}>
       <View style={s.iconWrap}>
-        <Text style={s.icon}>🔒</Text>
+        <AppIcon name="lock" size={44} color="#dc2626" />
       </View>
 
       <Text style={s.heading}>Suscripción Expirada</Text>
@@ -63,7 +65,9 @@ export default function SubscriptionExpiredScreen() {
 
       {SUPPORT_WHATSAPP ? (
         <TouchableOpacity onPress={contactSupport} style={s.primaryBtn}>
-          <Text style={s.btnText}>💬 Contactar Soporte para Renovar</Text>
+          <IconLabel icon="chat" color="#ffffff" textStyle={s.btnText}>
+            Contactar Soporte para Renovar
+          </IconLabel>
         </TouchableOpacity>
       ) : null}
 

@@ -31,13 +31,52 @@ import { Colors, Styles, FontSize, Radius, Shadow, Spacing } from "@/constants/s
 import { CardSkeleton } from "@/components/SkeletonLoader";
 import { KeyboardSafeModalBody } from "@/components/KeyboardSafeModalBody";
 import {
+  getClientLoans,
   getLoanClientName,
   groupLoansByClient,
   normalizeClientName,
   type ClientGroup,
 } from "@/lib/clients";
+import { formatDate, formatMoney } from "@/lib/format";
+import { AppIcon, type AppIconName } from "@/components/ui/app-icon";
+import { IconLabel } from "@/components/ui/icon-label";
+import { ClientHistoryModal } from "@/components/ClientHistoryModal";
 
 export { Loan, Payment } from "@/types";
+
+const ACTION_COLORS = {
+  neutral: { bg: "#eef0f3", fg: "#1f2937" },
+  blue: { bg: "#dbeafe", fg: "#1d4ed8" },
+  green: { bg: "#dcfce7", fg: "#166534" },
+  muted: { bg: "#f3f4f6", fg: "#6b7280" },
+} as const;
+
+function ActionButton({
+  icon,
+  label,
+  variant,
+  onPress,
+}: {
+  icon: AppIconName;
+  label: string;
+  variant: keyof typeof ACTION_COLORS;
+  onPress?: () => void;
+}) {
+  const { bg, fg } = ACTION_COLORS[variant];
+  return (
+    <TouchableOpacity
+      style={[s.actionBtn, { backgroundColor: bg }]}
+      activeOpacity={0.7}
+      onPress={onPress}
+      disabled={!onPress}
+    >
+      <AppIcon name={icon} size={18} color={fg} />
+      <Text style={[s.actionBtnText, { color: fg }]} numberOfLines={1}>
+        {label}
+      </Text>
+    </TouchableOpacity>
+  );
+}
 
 export default function LoansHistoryScreen() {
   const insets = useSafeAreaInsets();
@@ -47,6 +86,8 @@ export default function LoansHistoryScreen() {
   const [search, setSearch] = useState("");
   const [tab, setTab] = useState<"activos" | "pagados">("activos");
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [historyClientId, setHistoryClientId] = useState<string | null>(null);
+  const historyLoans = historyClientId ? getClientLoans(allLoans, historyClientId) : [];
   const query = normalizeClientName(search);
   const matchingLoans = query
     ? allLoans.filter((l) => normalizeClientName(getLoanClientName(l)).includes(query))
@@ -106,6 +147,9 @@ export default function LoansHistoryScreen() {
   });
 
   const isProcessing = registerPaymentMutation.isPending || registerZeroPaymentMutation.isPending;
+  const typedAmount = parseFloat(paymentAmount);
+  const exceedsRemaining =
+    !!selectedLoan && !isNaN(typedAmount) && typedAmount - selectedLoan.remaining > 0.005;
 
   useEffect(() => {
     if (!selectedLoan) return;
@@ -231,6 +275,13 @@ export default function LoansHistoryScreen() {
       showError("Error", "Ingresa un monto válido.");
       return;
     }
+    if (amount - selectedLoan.remaining > 0.005) {
+      showError(
+        "Monto mayor al restante",
+        `Solo se deben ${formatMoney(selectedLoan.remaining)}. Ingresa un monto menor o igual.`
+      );
+      return;
+    }
 
     registerPaymentMutation.mutate({
       loanId: selectedLoan.id,
@@ -286,98 +337,118 @@ export default function LoansHistoryScreen() {
     );
   };
 
-  const renderLoanRow = (item: Loan) => (
-    <View key={item.id} style={[s.loanRowCard, item.last_payment_was_zero && s.loanRowAlert]}>
-      <View style={s.loanHeader}>
-        <Text style={[s.loanName, item.last_payment_was_zero && s.textOnAlert]}>
-          Crédito del {new Date(item.created_at).toLocaleDateString()}
-        </Text>
-        <TouchableOpacity
-          onPress={() => handleDeleteLoan(item.id)}
-          style={s.deleteBtn}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        >
-          <IconSymbol name="trash.fill" size={18} color="#a00" />
-        </TouchableOpacity>
-      </View>
+  const renderLoanRow = (item: Loan) => {
+    const alert = item.last_payment_was_zero;
+    const fg = alert ? "#ffffff" : Colors.text;
+    const subtle = alert ? "#ffffff" : Colors.textGray;
 
-      {item.last_payment_was_zero && <Text style={s.alertLabel}>⚠️ DÍA SIN PAGO</Text>}
-
-      <Text style={[s.loanRow, item.last_payment_was_zero && s.textOnAlert]}>
-        💰 Restante: <Text style={{ fontWeight: "bold" }}>${item.remaining}</Text>
-      </Text>
-
-      <Text style={[s.loanRow, item.last_payment_was_zero && s.textOnAlert]}>
-        📈 Interés: <Text style={{ fontWeight: "bold" }}>{item.interes}%</Text>
-      </Text>
-
-      <View
-        style={[
-          Styles.loanBadge,
-          {
-            backgroundColor: item.status === "pendiente" ? Colors.badgeYellow : Colors.badgeGreen,
-          },
-        ]}
-      >
-        <Text style={{ color: Colors.text, fontWeight: "500" }}>{item.status}</Text>
-      </View>
-
-      {item.renewal_number > 0 && (
-        <Text style={s.renewalTag}>🔄 Renovación #{item.renewal_number}</Text>
-      )}
-
-      {item.note && (
-        <Text style={[s.loanNote, item.last_payment_was_zero && s.textOnAlert]}>
-          📝 {item.note}
-        </Text>
-      )}
-
-      <View style={s.loanActions}>
-        {item.remaining > 0 ? (
+    return (
+      <View key={item.id} style={[s.loanRowCard, alert && s.loanRowAlert]}>
+        <View style={s.loanHeader}>
+          <Text style={[s.loanName, alert && s.textOnAlert]}>
+            Crédito del {formatDate(item.created_at)}
+          </Text>
           <TouchableOpacity
-            style={Styles.loanCardBtn}
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-              setSelectedLoan(item);
-              setModalVisible(true);
-              setPaymentAmount("");
-              setNewRemaining(item.remaining);
-            }}
+            onPress={() => handleDeleteLoan(item.id)}
+            style={s.deleteBtn}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
-            <Text>Registrar Pago</Text>
+            <IconSymbol name="trash.fill" size={18} color="#a00" />
           </TouchableOpacity>
-        ) : renewedIds.has(item.id) ? (
-          <View style={s.renewedLabel}>
-            <Text style={s.renewedLabelText}>✅ Renovado</Text>
+        </View>
+
+        {alert && (
+          <View style={s.alertLabel}>
+            <AppIcon name="warning" size={14} color="#ffffff" />
+            <Text style={s.alertLabelText}>DÍA SIN PAGO</Text>
           </View>
-        ) : (
+        )}
+
+        <IconLabel icon="payments" color={fg} style={s.infoRow} textStyle={s.infoText}>
+          Restante: <Text style={s.bold}>{formatMoney(item.remaining)}</Text>
+        </IconLabel>
+        <IconLabel icon="trending-up" color={fg} style={s.infoRow} textStyle={s.infoText}>
+          Interés: <Text style={s.bold}>{item.interes}%</Text>
+        </IconLabel>
+
+        <View
+          style={[
+            Styles.loanBadge,
+            {
+              backgroundColor: item.status === "pendiente" ? Colors.badgeYellow : Colors.badgeGreen,
+            },
+          ]}
+        >
+          <Text style={{ color: Colors.text, fontWeight: "500" }}>{item.status}</Text>
+        </View>
+
+        {item.renewal_number > 0 && (
           <TouchableOpacity
-            style={s.renewCreditBtn}
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-              setLoanToRenew(item);
-              setRenewAmount("");
-              setRenewInteres(String(item.interes));
-              setRenewNote("");
-              setRenewModalVisible(true);
-            }}
+            style={s.renewalTag}
+            activeOpacity={0.7}
+            onPress={() => setHistoryClientId(item.client_id)}
           >
-            <Text style={s.renewCreditText}>🔄 Renovar crédito</Text>
+            <AppIcon name="autorenew" size={15} color="#1d4ed8" />
+            <Text style={s.renewalTagText}>Renovación #{item.renewal_number}</Text>
+            <AppIcon name="chevron-right" size={16} color="#1d4ed8" />
           </TouchableOpacity>
         )}
 
-        <TouchableOpacity style={Styles.loanCardBtnBlue} onPress={() => openPaymentsModal(item.id)}>
-          <Text style={{ fontWeight: "600" }}>Ver Pagos</Text>
-        </TouchableOpacity>
+        {item.note ? (
+          <IconLabel icon="notes" color={subtle} style={s.noteRow} textStyle={s.noteText}>
+            {item.note}
+          </IconLabel>
+        ) : null}
+
+        <View style={s.loanActions}>
+          {item.remaining > 0 ? (
+            <ActionButton
+              icon="payments"
+              label="Registrar pago"
+              variant="neutral"
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                setSelectedLoan(item);
+                setModalVisible(true);
+                setPaymentAmount("");
+                setNewRemaining(item.remaining);
+              }}
+            />
+          ) : renewedIds.has(item.id) ? (
+            <ActionButton icon="check-circle" label="Renovado" variant="muted" />
+          ) : (
+            <ActionButton
+              icon="autorenew"
+              label="Renovar crédito"
+              variant="green"
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                setLoanToRenew(item);
+                setRenewAmount("");
+                setRenewInteres(String(item.interes));
+                setRenewNote("");
+                setRenewModalVisible(true);
+              }}
+            />
+          )}
+
+          <ActionButton
+            icon="receipt-long"
+            label="Ver pagos"
+            variant="blue"
+            onPress={() => openPaymentsModal(item.id)}
+          />
+        </View>
       </View>
-    </View>
-  );
+    );
+  };
 
   const renderClient = ({ item: group }: { item: ClientGroup }) => {
     const key = `${tab}:${group.clientId}`;
     const isOpen = expanded[key] ?? (group.loans.length === 1 || query.length > 0);
     const alert = group.hasAlert;
     const count = group.loans.length;
+    const totalCredits = allLoans.filter((l) => l.client_id === group.clientId).length;
     const summary =
       tab === "activos"
         ? `${count} ${count === 1 ? "crédito activo" : "créditos activos"} · Restante $${group.totalRemaining}`
@@ -404,9 +475,21 @@ export default function LoansHistoryScreen() {
             </Text>
             <Text style={[s.clientSummary, alert && s.textOnAlert]}>{summary}</Text>
           </View>
-          <IconSymbol
-            name={isOpen ? "chevron.up" : "chevron.down"}
-            size={22}
+          {totalCredits > 1 && (
+            <TouchableOpacity
+              style={[s.historyIconBtn, alert && s.historyIconBtnAlert]}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setHistoryClientId(group.clientId);
+              }}
+            >
+              <AppIcon name="history" size={20} color={alert ? "#ffffff" : Colors.primary} />
+            </TouchableOpacity>
+          )}
+          <AppIcon
+            name={isOpen ? "expand-less" : "expand-more"}
+            size={26}
             color={alert ? "#ffffff" : Colors.textSecondary}
           />
         </TouchableOpacity>
@@ -421,11 +504,12 @@ export default function LoansHistoryScreen() {
       <Text style={s.pageTitle}>Préstamos</Text>
 
       <View style={s.searchWrap}>
+        <AppIcon name="search" size={22} color={Colors.textMuted} />
         <TextInput
           style={s.searchInput}
           value={search}
           onChangeText={setSearch}
-          placeholder="🔍 Buscar por nombre..."
+          placeholder="Buscar por nombre..."
           placeholderTextColor={Colors.placeholder}
           autoCorrect={false}
           returnKeyType="search"
@@ -436,7 +520,7 @@ export default function LoansHistoryScreen() {
             onPress={() => setSearch("")}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
-            <Text style={s.searchClearText}>✕</Text>
+            <AppIcon name="close" size={22} color={Colors.textMuted} />
           </TouchableOpacity>
         )}
       </View>
@@ -541,14 +625,21 @@ export default function LoansHistoryScreen() {
                         setPaymentMethod("efectivo");
                       }}
                     >
-                      <Text
-                        style={{
-                          color: paymentMethod === "efectivo" ? "white" : "black",
-                          fontWeight: paymentMethod === "efectivo" ? "600" : "400",
-                        }}
-                      >
-                        💵 Efectivo
-                      </Text>
+                      <View style={s.methodContent}>
+                        <AppIcon
+                          name="payments"
+                          size={18}
+                          color={paymentMethod === "efectivo" ? "white" : "black"}
+                        />
+                        <Text
+                          style={{
+                            color: paymentMethod === "efectivo" ? "white" : "black",
+                            fontWeight: paymentMethod === "efectivo" ? "600" : "400",
+                          }}
+                        >
+                          Efectivo
+                        </Text>
+                      </View>
                     </TouchableOpacity>
 
                     <TouchableOpacity
@@ -566,14 +657,21 @@ export default function LoansHistoryScreen() {
                         setPaymentMethod("transferencia");
                       }}
                     >
-                      <Text
-                        style={{
-                          color: paymentMethod === "transferencia" ? "white" : "black",
-                          fontWeight: paymentMethod === "transferencia" ? "600" : "400",
-                        }}
-                      >
-                        🏦 Transferencia
-                      </Text>
+                      <View style={s.methodContent}>
+                        <AppIcon
+                          name="account-balance"
+                          size={18}
+                          color={paymentMethod === "transferencia" ? "white" : "black"}
+                        />
+                        <Text
+                          style={{
+                            color: paymentMethod === "transferencia" ? "white" : "black",
+                            fontWeight: paymentMethod === "transferencia" ? "600" : "400",
+                          }}
+                        >
+                          Transferencia
+                        </Text>
+                      </View>
                     </TouchableOpacity>
                   </View>
 
@@ -588,12 +686,23 @@ export default function LoansHistoryScreen() {
                     />
                   </View>
 
-                  <Text style={s.remainingLabel}>
-                    Restante después del pago:{" "}
-                    <Text style={{ fontWeight: "bold" }}>
-                      ${newRemaining !== null ? newRemaining : selectedLoan.remaining}
+                  {exceedsRemaining ? (
+                    <IconLabel
+                      icon="error-outline"
+                      color={Colors.delete}
+                      style={s.overpayHint}
+                      textStyle={s.overpayHintText}
+                    >
+                      El monto supera lo que se debe ({formatMoney(selectedLoan.remaining)}).
+                    </IconLabel>
+                  ) : (
+                    <Text style={s.remainingLabel}>
+                      Restante después del pago:{" "}
+                      <Text style={{ fontWeight: "bold" }}>
+                        {formatMoney(newRemaining !== null ? newRemaining : selectedLoan.remaining)}
+                      </Text>
                     </Text>
-                  </Text>
+                  )}
 
                   <TouchableOpacity
                     style={[
@@ -610,9 +719,9 @@ export default function LoansHistoryScreen() {
                   </TouchableOpacity>
 
                   <TouchableOpacity
-                    style={s.paymentBtn}
+                    style={[s.paymentBtn, exceedsRemaining && { opacity: 0.4 }]}
                     onPress={handleRegisterPayment}
-                    disabled={isProcessing}
+                    disabled={isProcessing || exceedsRemaining}
                   >
                     <Text style={s.btnWhiteText}>
                       {isProcessing ? "Procesando..." : "Registrar Pago"}
@@ -694,23 +803,42 @@ export default function LoansHistoryScreen() {
                             },
                           ]}
                         >
-                          <Text
-                            style={{
-                              color: isZeroPayment
-                                ? "#D32F2F"
+                          <View style={s.methodContent}>
+                            <AppIcon
+                              name={
+                                isZeroPayment
+                                  ? "pause-circle-outline"
+                                  : p.method === "efectivo"
+                                    ? "payments"
+                                    : "account-balance"
+                              }
+                              size={14}
+                              color={
+                                isZeroPayment
+                                  ? "#D32F2F"
+                                  : p.method === "efectivo"
+                                    ? "#2E7D32"
+                                    : "#1565C0"
+                              }
+                            />
+                            <Text
+                              style={{
+                                color: isZeroPayment
+                                  ? "#D32F2F"
+                                  : p.method === "efectivo"
+                                    ? "#2E7D32"
+                                    : "#1565C0",
+                                fontWeight: "600",
+                                fontSize: FontSize.xs,
+                              }}
+                            >
+                              {isZeroPayment
+                                ? "Sin pago"
                                 : p.method === "efectivo"
-                                  ? "#2E7D32"
-                                  : "#1565C0",
-                              fontWeight: "600",
-                              fontSize: FontSize.xs,
-                            }}
-                          >
-                            {isZeroPayment
-                              ? "⏸️ Sin pago"
-                              : p.method === "efectivo"
-                                ? "💵 Efectivo"
-                                : "🏦 Transferencia"}
-                          </Text>
+                                  ? "Efectivo"
+                                  : "Transferencia"}
+                            </Text>
+                          </View>
                         </View>
                       </View>
 
@@ -721,14 +849,14 @@ export default function LoansHistoryScreen() {
                             { borderTopColor: isZeroPayment ? "#FFCDD2" : "#eee" },
                           ]}
                         >
-                          <Text
-                            style={[
-                              s.paymentNote,
-                              { color: isZeroPayment ? "#D32F2F" : Colors.textGray },
-                            ]}
+                          <IconLabel
+                            icon="notes"
+                            size={16}
+                            color={isZeroPayment ? "#D32F2F" : Colors.textGray}
+                            textStyle={s.paymentNote}
                           >
-                            📝 {p.note}
-                          </Text>
+                            {p.note}
+                          </IconLabel>
                         </View>
                       )}
                     </View>
@@ -756,6 +884,17 @@ export default function LoansHistoryScreen() {
         </View>
       </Modal>
 
+      <ClientHistoryModal
+        visible={historyClientId !== null && historyLoans.length > 0}
+        clientName={historyLoans[0] ? getLoanClientName(historyLoans[0]) : ""}
+        loans={historyLoans}
+        onClose={() => setHistoryClientId(null)}
+        onViewPayments={(loan) => {
+          setHistoryClientId(null);
+          setTimeout(() => openPaymentsModal(loan.id), 300);
+        }}
+      />
+
       <Modal visible={renewModalVisible} transparent animationType="fade">
         <KeyboardSafeModalBody>
           {loanToRenew && (
@@ -763,11 +902,16 @@ export default function LoansHistoryScreen() {
               <Text style={Styles.modalTitle}>Renovar Crédito</Text>
 
               <View style={s.renewInfoBox}>
-                <Text style={s.renewInfoText}>👤 {loanToRenew.debtor_name}</Text>
-                <Text style={s.renewInfoText}>
-                  💳 Método:{" "}
-                  {loanToRenew.payment_method === "efectivo" ? "Efectivo" : "Transferencia"}
-                </Text>
+                <IconLabel icon="person" color={Colors.textSecondary} textStyle={s.renewInfoText}>
+                  {getLoanClientName(loanToRenew)}
+                </IconLabel>
+                <IconLabel
+                  icon="credit-card"
+                  color={Colors.textSecondary}
+                  textStyle={s.renewInfoText}
+                >
+                  Método: {loanToRenew.payment_method === "efectivo" ? "Efectivo" : "Transferencia"}
+                </IconLabel>
               </View>
 
               <Text style={s.sectionLabel}>Nuevo monto:</Text>
@@ -872,15 +1016,24 @@ const s = StyleSheet.create({
   loanHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   loanName: { fontSize: FontSize.xl, fontWeight: "bold", color: Colors.text },
   deleteBtn: { padding: 6, borderRadius: Radius.sm, backgroundColor: Colors.deleteBg },
-  loanDate: { fontSize: FontSize.md, color: Colors.textGray, marginTop: 2 },
-  loanRow: { marginTop: 4, fontSize: FontSize.lg, color: Colors.text },
-  loanNote: {
-    marginTop: 10,
-    fontStyle: "italic",
-    color: Colors.textLightGray,
-    fontSize: FontSize.md,
+  infoRow: { marginTop: 6 },
+  infoText: { fontSize: FontSize.lg },
+  bold: { fontWeight: "bold" },
+  noteRow: { marginTop: 10 },
+  noteText: { fontStyle: "italic", fontSize: FontSize.md },
+  loanActions: { marginTop: 16, flexDirection: "row", gap: 10 },
+  actionBtn: {
+    flex: 1,
+    minHeight: 46,
+    borderRadius: Radius.md,
+    paddingHorizontal: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
   },
-  loanActions: { marginTop: 16, flexDirection: "row", justifyContent: "space-between" },
+  actionBtnText: { fontSize: FontSize.md, fontWeight: "700" },
+  methodContent: { flexDirection: "row", alignItems: "center", gap: 6 },
   paidLabel: {
     marginTop: Spacing.xxl,
     color: Colors.success,
@@ -895,6 +1048,8 @@ const s = StyleSheet.create({
     borderRadius: Radius.sm,
     padding: 8,
   },
+  overpayHint: { marginTop: 15 },
+  overpayHintText: { fontWeight: "600" },
   remainingLabel: { marginTop: 15, color: Colors.text },
   zeroPaymentBtn: {
     backgroundColor: "#FF9800",
@@ -1007,41 +1162,37 @@ const s = StyleSheet.create({
   renewalTag: {
     marginTop: 8,
     alignSelf: "flex-start",
-    color: "#1d4ed8",
-    backgroundColor: "#dbeafe",
-    fontWeight: "700",
-    fontSize: FontSize.sm,
-    paddingHorizontal: 10,
-    paddingVertical: 3,
-    borderRadius: Radius.sm,
-    overflow: "hidden",
-  },
-  renewedLabel: {
-    flex: 1,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: Radius.md,
+    flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#f3f4f6",
-    marginRight: 8,
+    gap: 4,
+    backgroundColor: "#dbeafe",
+    paddingLeft: 8,
+    paddingRight: 4,
+    paddingVertical: 4,
+    borderRadius: Radius.sm,
   },
-  renewedLabelText: { color: "#6b7280", fontWeight: "700", fontSize: FontSize.sm },
+  renewalTagText: { color: "#1d4ed8", fontWeight: "700", fontSize: FontSize.sm },
   alertLabel: {
     marginTop: 6,
     alignSelf: "flex-start",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
     backgroundColor: "#7f1d1d",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: Radius.sm,
+  },
+  alertLabelText: {
     color: "#ffffff",
     fontWeight: "800",
     fontSize: FontSize.sm,
     letterSpacing: 0.5,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: Radius.sm,
-    overflow: "hidden",
   },
   searchWrap: {
     flexDirection: "row",
     alignItems: "center",
+    gap: 8,
     backgroundColor: Colors.surface,
     borderRadius: Radius.md,
     borderWidth: 1,
@@ -1050,18 +1201,16 @@ const s = StyleSheet.create({
     marginBottom: 10,
   },
   searchInput: { flex: 1, paddingVertical: 10, fontSize: FontSize.lg, color: Colors.text },
-  searchClear: { paddingLeft: 8, paddingVertical: 6 },
-  searchClearText: { color: Colors.textMuted, fontSize: FontSize.xl, fontWeight: "bold" },
-  renewCreditBtn: {
-    flex: 1,
-    backgroundColor: "#e8f5e9",
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: Radius.md,
+  searchClear: { paddingVertical: 6 },
+  historyIconBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: "center",
-    marginRight: 8,
+    justifyContent: "center",
+    backgroundColor: Colors.primaryBg,
   },
-  renewCreditText: { color: "#2e7d32", fontWeight: "700", fontSize: FontSize.sm },
+  historyIconBtnAlert: { backgroundColor: "rgba(255,255,255,0.22)" },
   renewInfoBox: {
     width: "100%",
     backgroundColor: "#f1f5f9",
