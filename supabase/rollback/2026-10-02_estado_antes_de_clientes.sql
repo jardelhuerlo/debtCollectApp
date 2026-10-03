@@ -366,6 +366,8 @@ $function$;
 --    la migración; actualizar esta sección si cambian.
 -- =====================================================================
 --
+-- (Nombres FINALES, ya aplicados el 2026-10-02: ver supabase/migrations/20261002190*_clients_*.sql)
+--
 -- a) Quitar el trigger y su función de borrado de clientes huérfanos:
 --      DROP TRIGGER IF EXISTS loans_delete_orphan_client ON public.loans;
 --      DROP FUNCTION IF EXISTS public.delete_orphan_client();
@@ -375,9 +377,10 @@ $function$;
 --      -- y volver a ejecutar el CREATE OR REPLACE de arriba.
 --
 -- c) Quitar la relación con clientes (los datos de préstamos no se pierden):
---      ALTER TABLE public.loans DROP COLUMN IF EXISTS client_id;
+--      ALTER TABLE public.loans DROP COLUMN IF EXISTS client_id;   -- ya NOT NULL; se borra la columna entera
 --      DROP TABLE IF EXISTS public.clients;
 --      DROP FUNCTION IF EXISTS public.normalize_client_name(text);
+--      -- (opcional) DROP EXTENSION IF EXISTS unaccent;
 --
 -- d) Si fuera necesario recuperar los datos tal como estaban:
 --      -- Verificar primero: SELECT count(*) FROM respaldo.loans_20261002;  (6)
