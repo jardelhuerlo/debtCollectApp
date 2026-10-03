@@ -1,8 +1,8 @@
 import { StyleSheet } from "react-native";
 
 export const Colors = {
-  background: "#f8fafc",
-  backgroundGray: "#f5f5f5",
+  background: "#ffffff",
+  backgroundGray: "#ffffff",
   surface: "#ffffff",
   text: "#1e293b",
   textSecondary: "#64748b",
@@ -65,18 +65,18 @@ export const Radius = {
 
 export const Shadow = {
   sm: {
-    shadowColor: "#000",
+    shadowColor: "#0f172a",
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 2,
+    shadowOpacity: 0.04,
+    shadowRadius: 3,
+    elevation: 0,
   },
   md: {
-    shadowColor: "#000",
+    shadowColor: "#0f172a",
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 1,
   },
   lg: {
     shadowColor: Colors.primary,
@@ -246,6 +246,8 @@ export const Styles = StyleSheet.create({
     marginVertical: 10,
     padding: 16,
     borderRadius: Radius.lg,
+    borderWidth: 1,
+    borderColor: Colors.border,
     ...Shadow.md,
   },
 
@@ -258,11 +260,7 @@ export const Styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 20,
-    elevation: 5,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
+    ...Shadow.md,
   },
   avatarText: {
     color: Colors.surface,
@@ -276,6 +274,8 @@ export const Styles = StyleSheet.create({
     width: "100%",
     borderRadius: Radius.lg,
     padding: 20,
+    borderWidth: 1,
+    borderColor: Colors.border,
     ...Shadow.md,
   },
   profileName: {

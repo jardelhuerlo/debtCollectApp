@@ -22,7 +22,7 @@ import { getLoanClientName, normalizeClientName, suggestClientNames } from "@/li
 import { loanSchema } from "@/lib/validation";
 import { showSuccess, showError } from "@/lib/toast";
 import { logger } from "@/lib/logger";
-import { Colors, FontSize, Radius, Spacing, Styles } from "@/constants/styles";
+import { Colors, FontSize, Radius, Shadow, Spacing, Styles } from "@/constants/styles";
 import type { PaymentMethod } from "@/types";
 
 type LoanForm = z.infer<typeof loanSchema>;
@@ -301,7 +301,7 @@ const s = StyleSheet.create({
     marginTop: 40,
     flexDirection: "row",
     justifyContent: "center",
-    elevation: 3,
+    ...Shadow.md,
   },
   saveBtnText: { color: Colors.surface, fontSize: FontSize.lg, fontWeight: "bold" },
 });

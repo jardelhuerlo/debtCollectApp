@@ -13,7 +13,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { supabase } from "@/lib/supabase";
 import { showSuccess, showError } from "@/lib/toast";
-import { Colors, FontSize, Radius, Spacing } from "@/constants/styles";
+import { Colors, FontSize, Radius, Shadow, Spacing } from "@/constants/styles";
 
 interface UserProfile {
   id: string;
@@ -180,7 +180,7 @@ export default function AdminScreen() {
 }
 
 const s = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: "#f8fafc" },
+  screen: { flex: 1, backgroundColor: "#ffffff" },
   header: {
     paddingHorizontal: Spacing.lg,
     paddingTop: Spacing.md,
@@ -196,11 +196,9 @@ const s = StyleSheet.create({
     backgroundColor: "#fff",
     borderRadius: Radius.lg,
     padding: Spacing.md,
-    elevation: 2,
-    shadowColor: "#000",
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 2 },
+    borderWidth: 1,
+    borderColor: Colors.border,
+    ...Shadow.md,
   },
   cardInactive: { opacity: 0.7, borderLeftWidth: 3, borderLeftColor: Colors.delete },
   cardTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" },
