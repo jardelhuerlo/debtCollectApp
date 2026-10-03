@@ -30,6 +30,12 @@ import { logger } from "@/lib/logger";
 import { Colors, Styles, FontSize, Radius, Shadow, Spacing } from "@/constants/styles";
 import { CardSkeleton } from "@/components/SkeletonLoader";
 import { KeyboardSafeModalBody } from "@/components/KeyboardSafeModalBody";
+import {
+  getLoanClientName,
+  groupLoansByClient,
+  normalizeClientName,
+  type ClientGroup,
+} from "@/lib/clients";
 
 export { Loan, Payment } from "@/types";
 
@@ -40,15 +46,15 @@ export default function LoansHistoryScreen() {
   const allLoans = loansQuery.data ?? [];
   const [search, setSearch] = useState("");
   const [tab, setTab] = useState<"activos" | "pagados">("activos");
-  const normalize = (text: string) => text.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
-  const query = normalize(search.trim());
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const query = normalizeClientName(search);
   const matchingLoans = query
-    ? allLoans.filter((l) => normalize(l.debtor_name).includes(query))
+    ? allLoans.filter((l) => normalizeClientName(getLoanClientName(l)).includes(query))
     : allLoans;
-  const activeLoans = matchingLoans.filter((l) => l.remaining > 0);
-  const paidLoans = matchingLoans.filter((l) => l.remaining <= 0);
-  const loans = tab === "activos" ? activeLoans : paidLoans;
-  const otherTabCount = tab === "activos" ? paidLoans.length : activeLoans.length;
+  const activeGroups = groupLoansByClient(matchingLoans.filter((l) => l.remaining > 0));
+  const paidGroups = groupLoansByClient(matchingLoans.filter((l) => l.remaining <= 0));
+  const clientGroups = tab === "activos" ? activeGroups : paidGroups;
+  const otherTabCount = tab === "activos" ? paidGroups.length : activeGroups.length;
   const renewedIds = new Set(allLoans.map((l) => l.renewed_from).filter(Boolean));
   const isLoading = loansQuery.isLoading;
   const isRefetching = loansQuery.isRefetching;
@@ -210,7 +216,7 @@ export default function LoansHistoryScreen() {
 
   const openPaymentsModal = (loanId: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setHistoryLoan(loans.find((l) => l.id === loanId) || null);
+    setHistoryLoan(allLoans.find((l) => l.id === loanId) || null);
     setPaymentsModal(true);
   };
 
@@ -262,8 +268,9 @@ export default function LoansHistoryScreen() {
       },
       {
         onSuccess: () => {
-          showSuccess("Éxito", `Crédito renovado para ${loanToRenew.debtor_name}.`);
+          showSuccess("Éxito", `Crédito renovado para ${getLoanClientName(loanToRenew)}.`);
           setTab("activos");
+          setExpanded((prev) => ({ ...prev, [`activos:${loanToRenew.client_id}`]: true }));
           setRenewModalVisible(false);
           setLoanToRenew(null);
           setRenewAmount("");
@@ -279,15 +286,11 @@ export default function LoansHistoryScreen() {
     );
   };
 
-  const renderLoan = ({ item }: { item: Loan }) => (
-    <TouchableOpacity
-      style={[Styles.card, item.last_payment_was_zero && s.cardAlert]}
-      activeOpacity={0.7}
-      onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
-    >
+  const renderLoanRow = (item: Loan) => (
+    <View key={item.id} style={[s.loanRowCard, item.last_payment_was_zero && s.loanRowAlert]}>
       <View style={s.loanHeader}>
         <Text style={[s.loanName, item.last_payment_was_zero && s.textOnAlert]}>
-          {item.debtor_name}
+          Crédito del {new Date(item.created_at).toLocaleDateString()}
         </Text>
         <TouchableOpacity
           onPress={() => handleDeleteLoan(item.id)}
@@ -297,10 +300,6 @@ export default function LoansHistoryScreen() {
           <IconSymbol name="trash.fill" size={18} color="#a00" />
         </TouchableOpacity>
       </View>
-
-      <Text style={[s.loanDate, item.last_payment_was_zero && s.textOnAlert]}>
-        {new Date(item.created_at).toLocaleDateString()}
-      </Text>
 
       {item.last_payment_was_zero && <Text style={s.alertLabel}>⚠️ DÍA SIN PAGO</Text>}
 
@@ -371,8 +370,51 @@ export default function LoansHistoryScreen() {
           <Text style={{ fontWeight: "600" }}>Ver Pagos</Text>
         </TouchableOpacity>
       </View>
-    </TouchableOpacity>
+    </View>
   );
+
+  const renderClient = ({ item: group }: { item: ClientGroup }) => {
+    const key = `${tab}:${group.clientId}`;
+    const isOpen = expanded[key] ?? (group.loans.length === 1 || query.length > 0);
+    const alert = group.hasAlert;
+    const count = group.loans.length;
+    const summary =
+      tab === "activos"
+        ? `${count} ${count === 1 ? "crédito activo" : "créditos activos"} · Restante $${group.totalRemaining}`
+        : `${count} ${count === 1 ? "crédito pagado" : "créditos pagados"}`;
+
+    return (
+      <View style={[Styles.card, alert && s.cardAlert]}>
+        <TouchableOpacity
+          style={s.clientHeader}
+          activeOpacity={0.7}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            setExpanded((prev) => ({ ...prev, [key]: !isOpen }));
+          }}
+        >
+          <View style={[s.clientAvatar, alert && s.clientAvatarAlert]}>
+            <Text style={[s.clientAvatarText, alert && { color: "#dc2626" }]}>
+              {group.name.charAt(0).toUpperCase()}
+            </Text>
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={[s.clientName, alert && s.textOnAlert]} numberOfLines={1}>
+              {group.name}
+            </Text>
+            <Text style={[s.clientSummary, alert && s.textOnAlert]}>{summary}</Text>
+          </View>
+          <IconSymbol
+            name={isOpen ? "chevron.up" : "chevron.down"}
+            size={22}
+            color={alert ? "#ffffff" : Colors.textSecondary}
+          />
+        </TouchableOpacity>
+
+        {isOpen && <View>{group.loans.map(renderLoanRow)}</View>}
+      </View>
+    );
+  };
 
   return (
     <View style={[Styles.safeTop, { paddingTop: insets.top + 10 }]}>
@@ -402,8 +444,8 @@ export default function LoansHistoryScreen() {
       <View style={s.tabsRow}>
         {(
           [
-            { key: "activos", label: "Activos", count: activeLoans.length },
-            { key: "pagados", label: "Pagados", count: paidLoans.length },
+            { key: "activos", label: "Activos", count: activeGroups.length },
+            { key: "pagados", label: "Pagados", count: paidGroups.length },
           ] as const
         ).map((t) => (
           <TouchableOpacity
@@ -429,9 +471,10 @@ export default function LoansHistoryScreen() {
         </View>
       ) : (
         <FlatList
-          data={loans}
-          keyExtractor={(item) => item.id}
-          renderItem={renderLoan}
+          data={clientGroups}
+          extraData={expanded}
+          keyExtractor={(group) => group.clientId}
+          renderItem={renderClient}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           refreshControl={
@@ -928,6 +971,28 @@ const s = StyleSheet.create({
     borderColor: "#991b1b",
   },
   textOnAlert: { color: "#ffffff" },
+  loanRowCard: {
+    marginTop: 12,
+    padding: 12,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+    backgroundColor: "#fafafa",
+  },
+  loanRowAlert: { backgroundColor: "#b91c1c", borderColor: "#7f1d1d" },
+  clientHeader: { flexDirection: "row", alignItems: "center", gap: 12 },
+  clientAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: Colors.primaryBg,
+  },
+  clientAvatarAlert: { backgroundColor: "#ffffff" },
+  clientAvatarText: { fontSize: FontSize.xl, fontWeight: "bold", color: Colors.primary },
+  clientName: { fontSize: FontSize.xl, fontWeight: "bold", color: Colors.text },
+  clientSummary: { marginTop: 2, fontSize: FontSize.md, color: Colors.textGray },
   tabsRow: { flexDirection: "row", gap: 8, marginBottom: 10 },
   tabBtn: {
     flex: 1,

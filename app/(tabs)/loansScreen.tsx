@@ -16,7 +16,8 @@ import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import * as Haptics from "expo-haptics";
-import { useCreateLoanMutation } from "@/hooks/useQueryLoans";
+import { useCreateLoanMutation, useLoansQuery } from "@/hooks/useQueryLoans";
+import { getLoanClientName, normalizeClientName, suggestClientNames } from "@/lib/clients";
 import { loanSchema } from "@/lib/validation";
 import { showSuccess, showError } from "@/lib/toast";
 import { logger } from "@/lib/logger";
@@ -28,6 +29,7 @@ type LoanForm = z.infer<typeof loanSchema>;
 export default function LoansScreen() {
   const router = useRouter();
   const createLoanMutation = useCreateLoanMutation();
+  const allLoans = useLoansQuery().data ?? [];
 
   const {
     control,
@@ -96,18 +98,50 @@ export default function LoansScreen() {
           <Controller
             control={control}
             name="debtor_name"
-            render={({ field: { onChange, value } }) => (
-              <TextInput
-                placeholder="Ej: Juan Pérez"
-                placeholderTextColor={Colors.placeholder}
-                value={value}
-                onChangeText={(text) => {
-                  onChange(text);
-                  if (errors.debtor_name) clearErrors("debtor_name");
-                }}
-                style={[Styles.input, errors.debtor_name && Styles.inputDanger]}
-              />
-            )}
+            render={({ field: { onChange, value } }) => {
+              const suggestions = suggestClientNames(allLoans, value);
+              const isExisting =
+                value.trim().length > 0 &&
+                allLoans.some(
+                  (l) => normalizeClientName(getLoanClientName(l)) === normalizeClientName(value)
+                );
+              return (
+                <>
+                  <TextInput
+                    placeholder="Ej: Juan Pérez"
+                    placeholderTextColor={Colors.placeholder}
+                    value={value}
+                    onChangeText={(text) => {
+                      onChange(text);
+                      if (errors.debtor_name) clearErrors("debtor_name");
+                    }}
+                    style={[Styles.input, errors.debtor_name && Styles.inputDanger]}
+                  />
+                  {suggestions.length > 0 && (
+                    <View style={s.suggestBox}>
+                      {suggestions.map((name) => (
+                        <TouchableOpacity
+                          key={name}
+                          style={s.suggestRow}
+                          onPress={() => {
+                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                            onChange(name);
+                            if (errors.debtor_name) clearErrors("debtor_name");
+                          }}
+                        >
+                          <Text style={s.suggestText}>👤 {name}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  )}
+                  {isExisting && (
+                    <Text style={s.existingHint}>
+                      ✔ Cliente existente: se agregará un nuevo crédito a su nombre.
+                    </Text>
+                  )}
+                </>
+              );
+            }}
           />
           {errors.debtor_name && <Text style={Styles.error}>{errors.debtor_name.message}</Text>}
 
@@ -221,6 +255,23 @@ export default function LoansScreen() {
 
 const s = StyleSheet.create({
   container: { padding: Spacing.xxl },
+  suggestBox: {
+    marginTop: -4,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: "#d1d5db",
+    borderRadius: Radius.md,
+    backgroundColor: Colors.surface,
+    overflow: "hidden",
+  },
+  suggestRow: {
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f1f5f9",
+  },
+  suggestText: { fontSize: FontSize.lg, color: Colors.text },
+  existingHint: { marginBottom: 8, fontSize: FontSize.md, color: Colors.success },
   heading: { fontSize: FontSize.title, fontWeight: "bold", marginBottom: 20, color: Colors.text },
   preview: {
     fontSize: FontSize.xxl,

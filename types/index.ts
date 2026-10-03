@@ -14,6 +14,8 @@ export interface Loan {
   last_payment_was_zero: boolean;
   renewed_from: string | null;
   renewal_number: number;
+  client_id: string;
+  client?: { id: string; name: string } | null;
   created_at: string;
 }
 

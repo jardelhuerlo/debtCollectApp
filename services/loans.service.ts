@@ -5,7 +5,7 @@ import { sanitizeString, sanitizeNote, sanitizeNumber } from "@/lib/sanitize";
 export async function fetchLoans(ownerId: string): Promise<SupabaseResult<Loan[]>> {
   const { data, error } = await supabase
     .from("loans")
-    .select("*")
+    .select("*, client:clients(id, name)")
     .eq("owner_id", ownerId)
     .order("created_at", { ascending: false });
 

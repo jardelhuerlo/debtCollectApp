@@ -11,5 +11,6 @@ module.exports = {
     "**/__tests__/rateLimiter.test.ts",
     "**/__tests__/sanitize.test.ts",
     "**/__tests__/validation.test.ts",
+    "**/__tests__/clients.test.ts",
   ],
 };
