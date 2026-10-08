@@ -1,6 +1,7 @@
 import { IconSymbol } from "@/components/ui/icon-symbol";
 import * as Print from "expo-print";
 import { File, Paths } from "expo-file-system";
+import { shareAsync } from "expo-sharing";
 import * as Haptics from "expo-haptics";
 import { useEffect, useState, useCallback } from "react";
 import {
@@ -233,7 +234,7 @@ export default function LoansHistoryScreen() {
       const namedFile = new File(Paths.cache, `${fileName}.pdf`);
       if (namedFile.exists) namedFile.delete();
       new File(uri).move(namedFile);
-      await Print.printAsync({ uri: namedFile.uri });
+      await shareAsync(namedFile.uri, { UTI: "com.adobe.pdf", mimeType: "application/pdf" });
     } catch (error) {
       logger.error("PDF generation failed", error);
       showError("Error", "No se pudo generar el PDF");
